@@ -1,0 +1,493 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SEEKER
+  OWNER
+  ADMIN
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  SUSPENDED
+}
+
+enum VerificationLevel {
+  UNVERIFIED
+  OWNER_VERIFIED
+  PROPERTY_VERIFIED
+  PGDOOR_VERIFIED
+}
+
+enum OwnerVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum PgType {
+  BOYS
+  GIRLS
+  CO_LIVING
+  UNISEX
+}
+
+enum RoomSharingType {
+  SINGLE
+  DOUBLE
+  TRIPLE
+  FOUR
+}
+
+enum BedStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+}
+
+enum AmenityGroup {
+  ROOM
+  PROPERTY
+  SERVICES
+}
+
+enum LeadMoveInWindow {
+  IMMEDIATE
+  WITHIN_7_DAYS
+  THIS_MONTH
+  LATER
+}
+
+enum LeadIntentScore {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  VISIT_SCHEDULED
+  CLOSED
+}
+
+enum LeadEventType {
+  WHATSAPP_CLICK
+  CALL_CLICK
+  ENQUIRY
+  VISIT_REQUEST
+}
+
+enum VisitStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ReportReason {
+  WRONG_PRICE
+  NOT_AVAILABLE
+  FAKE_PHOTOS
+  WRONG_LOCATION
+  OWNER_ISSUE
+  DUPLICATE_LISTING
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum VerificationCheckType {
+  PROPERTY
+  OWNER
+  PHOTOS
+  ADDRESS
+  AMENITIES
+  PRICING
+  AVAILABILITY
+}
+
+enum LandmarkType {
+  METRO
+  COLLEGE
+  OFFICE
+  RESTAURANT
+  HOSPITAL
+  GROCERY
+  OTHER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  phone         String    @unique
+  email         String?   @unique
+  role          UserRole  @default(SEEKER)
+  phoneVerified Boolean   @default(false)
+  blocked       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  ownerProfile    OwnerProfile?
+  leads           Lead[]
+  savedProperties SavedProperty[]
+  reviews         Review[]
+  reports         Report[]
+  sessions        Session[]
+  otpCodes        OtpCode[]
+  auditLogs       AuditLog[]
+  leadEvents      LeadEvent[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model OtpCode {
+  id         String    @id @default(cuid())
+  userId     String?
+  phone      String
+  codeHash   String
+  purpose    String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phone, purpose])
+}
+
+model OwnerProfile {
+  id                 String                  @id @default(cuid())
+  userId             String                  @unique
+  businessName       String?
+  verificationStatus OwnerVerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  properties Property[]
+  leads      Lead[]
+}
+
+model City {
+  id        String  @id @default(cuid())
+  name      String
+  slug      String  @unique
+  state     String
+  isActive  Boolean @default(true)
+  latitude  Float?
+  longitude Float?
+
+  areas      Area[]
+  landmarks  Landmark[]
+  properties Property[]
+}
+
+model Area {
+  id        String  @id @default(cuid())
+  cityId    String
+  name      String
+  slug      String
+  latitude  Float?
+  longitude Float?
+
+  city       City       @relation(fields: [cityId], references: [id])
+  properties Property[]
+  landmarks  Landmark[]
+
+  @@unique([cityId, slug])
+}
+
+model Landmark {
+  id        String       @id @default(cuid())
+  cityId    String
+  areaId    String?
+  name      String
+  slug      String
+  type      LandmarkType
+  latitude  Float
+  longitude Float?
+
+  city City @relation(fields: [cityId], references: [id])
+  area Area? @relation(fields: [areaId], references: [id])
+
+  @@unique([cityId, slug])
+}
+
+model Property {
+  id                      String            @id @default(cuid())
+  ownerId                 String
+  name                    String
+  slug                    String            @unique
+  description             String?           @db.Text
+  address                 String
+  cityId                  String
+  areaId                  String
+  latitude                Float
+  longitude               Float
+  pgType                  PgType
+  status                  PropertyStatus    @default(PENDING_REVIEW)
+  verificationLevel       VerificationLevel @default(UNVERIFIED)
+  featured                Boolean           @default(false)
+  minRent                 Int               @default(0)
+  minDeposit              Int               @default(0)
+  availableBeds           Int               @default(0)
+  totalBeds               Int               @default(0)
+  foodIncluded            Boolean           @default(false)
+  maintenanceCharge       Int?
+  electricityNote         String?
+  vegetarianFood          Boolean           @default(false)
+  nonVegetarianFood       Boolean           @default(false)
+  smokingAllowed          Boolean           @default(false)
+  visitorsAllowed         Boolean           @default(false)
+  cookingAllowed          Boolean           @default(false)
+  ratingAvg               Float             @default(0)
+  reviewCount             Int               @default(0)
+  viewCount               Int               @default(0)
+  availabilityUpdatedAt   DateTime          @default(now())
+  availabilityConfirmedAt DateTime          @default(now())
+  moveInFrom              DateTime?
+  verifiedAt              DateTime?
+  publishedAt             DateTime?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  owner                 OwnerProfile           @relation(fields: [ownerId], references: [id])
+  city                  City                   @relation(fields: [cityId], references: [id])
+  area                  Area                   @relation(fields: [areaId], references: [id])
+  roomTypes             RoomType[]
+  rooms                 Room[]
+  photos                Photo[]
+  amenities             PropertyAmenity[]
+  leads                 Lead[]
+  reviews               Review[]
+  reports               Report[]
+  savedBy               SavedProperty[]
+  verificationChecks    VerificationCheck[]
+  availabilityReminders AvailabilityReminder[]
+  leadEvents            LeadEvent[]
+
+  @@index([cityId, status])
+  @@index([areaId, status])
+  @@index([status, featured, minRent])
+  @@index([availableBeds])
+}
+
+model RoomType {
+  id            String          @id @default(cuid())
+  propertyId    String
+  sharingType   RoomSharingType
+  rent          Int
+  deposit       Int
+  totalBeds     Int
+  availableBeds Int
+  rooms         Room[]
+  property      Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, sharingType])
+}
+
+model Room {
+  id         String   @id @default(cuid())
+  propertyId String
+  roomTypeId String
+  name       String
+  totalBeds  Int
+  beds       Bed[]
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+}
+
+model Bed {
+  id     String    @id @default(cuid())
+  roomId String
+  label  String
+  status BedStatus @default(AVAILABLE)
+  room   Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+model Amenity {
+  id         String            @id @default(cuid())
+  name       String
+  slug       String            @unique
+  group      AmenityGroup
+  properties PropertyAmenity[]
+}
+
+model PropertyAmenity {
+  propertyId String
+  amenityId  String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity    Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, amenityId])
+}
+
+model Photo {
+  id           String   @id @default(cuid())
+  propertyId   String
+  url          String
+  thumbnailUrl String?
+  alt          String?
+  sortOrder    Int      @default(0)
+  width        Int?
+  height       Int?
+  mimeType     String?
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id             String           @id @default(cuid())
+  seekerId       String
+  propertyId     String
+  ownerId        String
+  moveInWindow   LeadMoveInWindow
+  roomPreference RoomSharingType?
+  budget         Int?
+  phoneVerified  Boolean          @default(false)
+  intentScore    LeadIntentScore  @default(MEDIUM)
+  status         LeadStatus       @default(NEW)
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  seeker   User         @relation(fields: [seekerId], references: [id])
+  property Property     @relation(fields: [propertyId], references: [id])
+  owner    OwnerProfile @relation(fields: [ownerId], references: [id])
+  visits   Visit[]
+  events   LeadEvent[]
+
+  @@index([ownerId, status])
+  @@index([propertyId])
+}
+
+model Visit {
+  id          String      @id @default(cuid())
+  leadId      String
+  scheduledAt DateTime
+  status      VisitStatus @default(REQUESTED)
+  notes       String?
+  createdAt   DateTime    @default(now())
+  lead        Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model LeadEvent {
+  id         String        @id @default(cuid())
+  leadId     String?
+  propertyId String
+  userId     String?
+  type       LeadEventType
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+
+  lead     Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id])
+
+  @@index([propertyId, type])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  overall    Float
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  scores     ReviewScore?
+
+  @@unique([userId, propertyId])
+}
+
+model ReviewScore {
+  id          String @id @default(cuid())
+  reviewId    String @unique
+  cleanliness Float
+  food        Float
+  location    Float
+  management  Float
+  value       Float
+  review      Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+}
+
+model SavedProperty {
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, propertyId])
+}
+
+model Report {
+  id         String       @id @default(cuid())
+  userId     String?
+  propertyId String
+  reason     ReportReason
+  details    String?
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+  user       User?        @relation(fields: [userId], references: [id])
+  property   Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model VerificationCheck {
+  id         String                @id @default(cuid())
+  propertyId String
+  type       VerificationCheckType
+  passed     Boolean               @default(false)
+  checkedAt  DateTime?
+  property   Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, type])
+}
+
+model AvailabilityReminder {
+  id          String    @id @default(cuid())
+  propertyId  String
+  sentAt      DateTime  @default(now())
+  respondedAt DateTime?
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+}

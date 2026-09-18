@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ink: #0f172a;
+  --primary: #7a9b80;
+  --primary-hover: #688a6e;
+  --primary-soft: #eaf0eb;
+  --canvas: #f3f6f4;
+  --surface: #ffffff;
+  --success: #16a34a;
+  --warning: #d97706;
+  --error: #dc2626;
+  --muted: #94a3b8;
+  --background: #f3f6f4;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f6f4;
+  --secondary-foreground: #0f172a;
+  --muted-foreground: #64748b;
+  --accent: #eaf0eb;
+  --accent-foreground: #0f172a;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #7a9b80;
+  --radius: 0.9rem;
+  --shadow-card: 0 4px 20px rgba(15, 23, 42, 0.06);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ink: var(--ink);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --font-sans: var(--font-plus-jakarta);
+  --radius-sm: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.5rem;
+  --shadow-card: var(--shadow-card);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+}
+
+.container-pg {
+  width: 100%;
+  max-width: 72rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-pg {
+    padding-inline: 1.5rem;
+  }
+}
+
+.shadow-card {
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
 }
