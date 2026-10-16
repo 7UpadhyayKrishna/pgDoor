@@ -43,6 +43,8 @@ export function OwnerWizard({
   const [maintenanceCharge, setMaintenanceCharge] = useState("500");
   const [electricityNote, setElectricityNote] = useState("Actual");
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>(["wifi", "ac"]);
+  const [otherEnabled, setOtherEnabled] = useState(false);
+  const [otherAmenities, setOtherAmenities] = useState("");
   const [rooms, setRooms] = useState(
     SHARING.map((sharingType) => ({
       sharingType,
@@ -75,6 +77,10 @@ export function OwnerWizard({
       setError("Select a location from the suggestions");
       return;
     }
+    if (otherEnabled && !otherAmenities.trim()) {
+      setError("Describe the additional amenities, or uncheck Other");
+      return;
+    }
     setLoading(true);
     setError("");
     const payload = {
@@ -89,6 +95,7 @@ export function OwnerWizard({
       maintenanceCharge: Number(maintenanceCharge) || undefined,
       electricityNote,
       amenitySlugs: selectedAmenities,
+      otherAmenities: otherEnabled ? otherAmenities.trim() : undefined,
       rooms: rooms
         .filter((r) => r.enabled && r.roomCount > 0)
         .map(({ sharingType, rent, deposit, roomCount, availableBeds }) => ({
@@ -254,21 +261,46 @@ export function OwnerWizard({
         </div>
       ) : null}
       {step === 3 ? (
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {amenities.map((a) => (
-            <label key={a.slug} className="flex items-center gap-2 text-sm">
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {amenities.map((a) => (
+              <label key={a.slug} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selectedAmenities.includes(a.slug)}
+                  onChange={() =>
+                    setSelectedAmenities((curr) =>
+                      curr.includes(a.slug) ? curr.filter((s) => s !== a.slug) : [...curr, a.slug],
+                    )
+                  }
+                />
+                {a.name}
+              </label>
+            ))}
+            <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={selectedAmenities.includes(a.slug)}
-                onChange={() =>
-                  setSelectedAmenities((curr) =>
-                    curr.includes(a.slug) ? curr.filter((s) => s !== a.slug) : [...curr, a.slug],
-                  )
-                }
+                checked={otherEnabled}
+                onChange={(e) => {
+                  setOtherEnabled(e.target.checked);
+                  if (!e.target.checked) setOtherAmenities("");
+                }}
               />
-              {a.name}
+              Other
             </label>
-          ))}
+          </div>
+          {otherEnabled ? (
+            <div>
+              <Label>Other amenities</Label>
+              <Input
+                className="mt-1"
+                placeholder="e.g. Study table, balcony, RO water"
+                value={otherAmenities}
+                onChange={(e) => setOtherAmenities(e.target.value)}
+                maxLength={500}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
       {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}

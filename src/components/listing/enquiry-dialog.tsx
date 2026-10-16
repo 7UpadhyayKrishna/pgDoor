@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { ChatSheet } from "@/components/listing/chat-sheet";
 import { MOVE_IN_LABEL } from "@/lib/constants";
 
 const WINDOWS = ["IMMEDIATE", "WITHIN_7_DAYS", "THIS_MONTH", "LATER"] as const;
@@ -24,10 +25,13 @@ export function EnquirySheet({
   const [moveInWindow, setMoveInWindow] = useState<(typeof WINDOWS)[number]>("WITHIN_7_DAYS");
   const [roomPreference, setRoomPreference] = useState<string>("");
   const [budget, setBudget] = useState("");
+  const [message, setMessage] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   async function sendOtp() {
     setLoading(true);
@@ -68,6 +72,7 @@ export function EnquirySheet({
         moveInWindow,
         roomPreference: roomPreference || undefined,
         budget: budget ? Number(budget) : undefined,
+        message: message.trim() || undefined,
       }),
     });
     const data = await lead.json();
@@ -76,98 +81,143 @@ export function EnquirySheet({
       setError(data.error ?? "Could not send enquiry");
       return;
     }
+    setLeadId(data.lead?.id ?? null);
     setStep("done");
   }
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) {
-          setStep("form");
-          setError("");
-        }
-      }}
-    >
-      <SheetTrigger asChild>
-        <Button variant={triggerVariant} className={triggerClassName} size="lg">
-          Talk to the owner
-        </Button>
-      </SheetTrigger>
-      <SheetContent>
-        <SheetTitle>
-          {step === "done" ? "Enquiry sent!" : "Interested in this PG?"}
-        </SheetTitle>
-        {step === "form" ? (
-          <div className="mt-4 space-y-4">
-            <div>
-              <Label>When do you want to move?</Label>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {WINDOWS.map((w) => (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => setMoveInWindow(w)}
-                    className={`min-h-11 rounded-xl border px-3 text-sm ${
-                      moveInWindow === w ? "border-primary bg-primary-soft" : "border-input"
-                    }`}
-                  >
-                    {MOVE_IN_LABEL[w]}
-                  </button>
-                ))}
+    <>
+      <Sheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) {
+            setStep("form");
+            setError("");
+          }
+        }}
+      >
+        <SheetTrigger asChild>
+          <Button variant={triggerVariant} className={triggerClassName} size="lg">
+            Talk to the owner
+          </Button>
+        </SheetTrigger>
+        <SheetContent>
+          <SheetTitle>
+            {step === "done" ? "Enquiry sent!" : "Interested in this PG?"}
+          </SheetTitle>
+          {step === "form" ? (
+            <div className="mt-4 space-y-4">
+              <div>
+                <Label>When do you want to move?</Label>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {WINDOWS.map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => setMoveInWindow(w)}
+                      className={`min-h-11 rounded-xl border px-3 text-sm ${
+                        moveInWindow === w ? "border-primary bg-primary-soft" : "border-input"
+                      }`}
+                    >
+                      {MOVE_IN_LABEL[w]}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div>
-              <Label>Room preference</Label>
-              <div className="mt-2 flex gap-2">
-                {ROOMS.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setRoomPreference(r)}
-                    className={`min-h-11 flex-1 rounded-xl border px-2 text-sm ${
-                      roomPreference === r ? "border-primary bg-primary-soft" : "border-input"
-                    }`}
-                  >
-                    {r[0] + r.slice(1).toLowerCase()}
-                  </button>
-                ))}
+              <div>
+                <Label>Room preference</Label>
+                <div className="mt-2 flex gap-2">
+                  {ROOMS.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRoomPreference(r)}
+                      className={`min-h-11 flex-1 rounded-xl border px-2 text-sm ${
+                        roomPreference === r ? "border-primary bg-primary-soft" : "border-input"
+                      }`}
+                    >
+                      {r[0] + r.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <div>
+                <Label>Budget</Label>
+                <Input
+                  className="mt-2"
+                  inputMode="numeric"
+                  placeholder="₹"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Message to owner (optional)</Label>
+                <textarea
+                  className="mt-2 min-h-24 w-full rounded-xl border px-3 py-2 text-sm"
+                  placeholder="Ask about availability, food, or visit timings…"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  maxLength={2000}
+                />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="+91"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+              {error ? <p className="text-sm text-error">{error}</p> : null}
+              <Button className="w-full" onClick={sendOtp} disabled={loading || phone.length < 10}>
+                Ask about this PG
+              </Button>
             </div>
-            <div>
-              <Label>Budget</Label>
-              <Input className="mt-2" inputMode="numeric" placeholder="₹" value={budget} onChange={(e) => setBudget(e.target.value)} />
+          ) : null}
+          {step === "otp" ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Enter the OTP sent to {phone}.</p>
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="OTP" />
+              {error ? <p className="text-sm text-error">{error}</p> : null}
+              <Button className="w-full" onClick={verifyAndSend} disabled={loading}>
+                Verify & send
+              </Button>
             </div>
-            <div>
-              <Label>Phone</Label>
-              <Input className="mt-2" placeholder="+91" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          ) : null}
+          {step === "done" ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                The owner will see your enquiry. You can chat with them on pgDoor now.
+              </p>
+              {leadId ? (
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    setOpen(false);
+                    setChatOpen(true);
+                  }}
+                >
+                  Chat with owner
+                </Button>
+              ) : null}
+              <Button className="w-full" variant="outline" onClick={() => setOpen(false)}>
+                Done
+              </Button>
             </div>
-            {error ? <p className="text-sm text-error">{error}</p> : null}
-            <Button className="w-full" onClick={sendOtp} disabled={loading || phone.length < 10}>
-              Ask about this PG
-            </Button>
-          </div>
-        ) : null}
-        {step === "otp" ? (
-          <div className="mt-4 space-y-3">
-            <p className="text-sm text-muted-foreground">Enter the OTP sent to {phone}.</p>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="OTP" />
-            {error ? <p className="text-sm text-error">{error}</p> : null}
-            <Button className="w-full" onClick={verifyAndSend} disabled={loading}>
-              Verify & send
-            </Button>
-          </div>
-        ) : null}
-        {step === "done" ? (
-          <div className="mt-4 space-y-3">
-            <p className="text-sm text-muted-foreground">The owner will contact you shortly.</p>
-            <Button className="w-full" onClick={() => setOpen(false)}>
-              Done
-            </Button>
-          </div>
-        ) : null}
-      </SheetContent>
-    </Sheet>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+      {leadId ? (
+        <ChatSheet
+          leadId={leadId}
+          open={chatOpen}
+          onOpenChange={setChatOpen}
+          title="Chat with owner"
+        />
+      ) : null}
+    </>
   );
 }

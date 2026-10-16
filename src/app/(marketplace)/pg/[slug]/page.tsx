@@ -139,6 +139,12 @@ export default async function PgDetailPage({
                 </li>
               ))}
             </ul>
+            {property.otherAmenities ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                <span className="font-medium text-ink">Also: </span>
+                {property.otherAmenities}
+              </p>
+            ) : null}
           </section>
 
           {nearby ? (

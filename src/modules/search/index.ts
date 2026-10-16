@@ -353,6 +353,7 @@ export const createPropertySchema = z.object({
   visitorsAllowed: z.boolean().optional(),
   cookingAllowed: z.boolean().optional(),
   amenitySlugs: z.array(z.string()).default([]),
+  otherAmenities: z.string().max(500).optional(),
   rooms: z
     .array(
       z.object({
@@ -406,6 +407,7 @@ export async function createListing(
         smokingAllowed: input.smokingAllowed ?? false,
         visitorsAllowed: input.visitorsAllowed ?? false,
         cookingAllowed: input.cookingAllowed ?? false,
+        otherAmenities: input.otherAmenities?.trim() || null,
         amenities: {
           create: amenities.map((amenity) => ({ amenityId: amenity.id })),
         },

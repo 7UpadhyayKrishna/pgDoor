@@ -3,6 +3,7 @@ import { listOwnerLeads } from "@/modules/leads";
 import { MOVE_IN_LABEL } from "@/lib/constants";
 import { formatInr } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { ChatSheet } from "@/components/listing/chat-sheet";
 
 export const dynamic = "force-dynamic";
 
@@ -23,20 +24,30 @@ export default async function OwnerLeadsPage() {
           return (
             <li key={lead.id} className="rounded-[18px] bg-white p-4 shadow-card">
               <p className="text-xs font-semibold text-primary">
-                {lead.intentScore === "HIGH" ? "High intent" : lead.intentScore === "MEDIUM" ? "Medium" : "Low"}
+                {lead.intentScore === "HIGH"
+                  ? "High intent"
+                  : lead.intentScore === "MEDIUM"
+                    ? "Medium"
+                    : "Low"}
               </p>
               <p className="mt-1 font-semibold">{lead.seeker.name ?? lead.seeker.phone}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Move-in: {MOVE_IN_LABEL[lead.moveInWindow]}
+                {lead.property.name} · Move-in: {MOVE_IN_LABEL[lead.moveInWindow]}
                 {lead.budget ? ` · Budget: ${formatInr(lead.budget)}` : ""}
                 {lead.roomPreference ? ` · Room: ${lead.roomPreference}` : ""}
                 {lead.phoneVerified ? " · Phone verified ✓" : ""}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
+                <ChatSheet
+                  leadId={lead.id}
+                  title={`Chat · ${lead.seeker.name ?? lead.seeker.phone}`}
+                  triggerLabel="Chat"
+                  triggerVariant="default"
+                />
                 <Button asChild variant="outline" size="sm">
                   <a href={`tel:${lead.seeker.phone}`}>Call</a>
                 </Button>
-                <Button asChild size="sm">
+                <Button asChild variant="outline" size="sm">
                   <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer">
                     WhatsApp
                   </a>

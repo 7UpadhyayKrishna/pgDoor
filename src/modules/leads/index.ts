@@ -9,6 +9,7 @@ export const createLeadSchema = z.object({
   moveInWindow: z.enum(["IMMEDIATE", "WITHIN_7_DAYS", "THIS_MONTH", "LATER"]),
   roomPreference: z.enum(["SINGLE", "DOUBLE", "TRIPLE", "FOUR"]).optional(),
   budget: z.number().int().positive().optional(),
+  message: z.string().trim().min(1).max(2000).optional(),
 });
 
 export function scoreLead(input: {
@@ -83,6 +84,16 @@ export async function createEnquiry(
     },
   });
 
+  if (input.message) {
+    await prisma.chatMessage.create({
+      data: {
+        leadId: lead.id,
+        senderId: seekerId,
+        body: input.message,
+      },
+    });
+  }
+
   await track(AnalyticsEvent.contact, {
     propertyId: property.id,
     leadId: lead.id,
@@ -90,6 +101,65 @@ export async function createEnquiry(
   });
 
   return lead;
+}
+
+async function assertLeadParticipant(leadId: string, userId: string, ownerProfileId?: string | null) {
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: {
+      id: true,
+      seekerId: true,
+      ownerId: true,
+      property: { select: { name: true } },
+    },
+  });
+  if (!lead) throw new HttpError(404, "Conversation not found");
+
+  const isSeeker = lead.seekerId === userId;
+  const isOwner = Boolean(ownerProfileId && lead.ownerId === ownerProfileId);
+  if (!isSeeker && !isOwner) {
+    throw new HttpError(403, "You cannot access this chat");
+  }
+  return lead;
+}
+
+export async function listLeadMessages(
+  leadId: string,
+  userId: string,
+  ownerProfileId?: string | null,
+) {
+  await assertLeadParticipant(leadId, userId, ownerProfileId);
+  return prisma.chatMessage.findMany({
+    where: { leadId },
+    orderBy: { createdAt: "asc" },
+    include: {
+      sender: { select: { id: true, name: true, role: true } },
+    },
+  });
+}
+
+export async function sendLeadMessage(
+  leadId: string,
+  userId: string,
+  body: string,
+  ownerProfileId?: string | null,
+) {
+  const text = body.trim();
+  if (!text) throw new HttpError(400, "Message cannot be empty");
+  if (text.length > 2000) throw new HttpError(400, "Message is too long");
+
+  await assertLeadParticipant(leadId, userId, ownerProfileId);
+
+  return prisma.chatMessage.create({
+    data: {
+      leadId,
+      senderId: userId,
+      body: text,
+    },
+    include: {
+      sender: { select: { id: true, name: true, role: true } },
+    },
+  });
 }
 
 export async function listOwnerLeads(ownerProfileId: string) {

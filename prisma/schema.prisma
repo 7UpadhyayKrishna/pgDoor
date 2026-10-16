@@ -154,6 +154,7 @@ model User {
   otpCodes        OtpCode[]
   auditLogs       AuditLog[]
   leadEvents      LeadEvent[]
+  chatMessages    ChatMessage[]
 }
 
 model Session {
@@ -266,6 +267,7 @@ model Property {
   smokingAllowed          Boolean           @default(false)
   visitorsAllowed         Boolean           @default(false)
   cookingAllowed          Boolean           @default(false)
+  otherAmenities          String?           @db.Text
   ratingAvg               Float             @default(0)
   reviewCount             Int               @default(0)
   viewCount               Int               @default(0)
@@ -383,9 +385,23 @@ model Lead {
   owner    OwnerProfile @relation(fields: [ownerId], references: [id])
   visits   Visit[]
   events   LeadEvent[]
+  messages ChatMessage[]
 
   @@index([ownerId, status])
   @@index([propertyId])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  leadId    String
+  senderId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
 }
 
 model Visit {

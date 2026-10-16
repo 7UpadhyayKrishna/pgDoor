@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { listSeekerLeads } from "@/modules/leads";
 import { MOVE_IN_LABEL } from "@/lib/constants";
+import { ChatSheet } from "@/components/listing/chat-sheet";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,13 @@ export default async function EnquiriesPage() {
             <p className="text-sm text-muted-foreground">
               {MOVE_IN_LABEL[lead.moveInWindow]} · {lead.status}
             </p>
+            <div className="mt-3">
+              <ChatSheet
+                leadId={lead.id}
+                title={`Chat · ${lead.property.name}`}
+                triggerLabel="Open chat"
+              />
+            </div>
           </li>
         ))}
         {leads.length === 0 ? (
