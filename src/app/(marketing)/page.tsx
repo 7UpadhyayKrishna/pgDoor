@@ -5,7 +5,6 @@ import { HeroSearch } from "@/components/search/hero-search";
 import { PgCard } from "@/components/search/pg-card";
 import { Button } from "@/components/ui/button";
 import { QUICK_CHIPS } from "@/lib/constants";
-import { getCachedCityOptions } from "@/modules/locations";
 import { getCachedFeatured } from "@/modules/search";
 
 export const revalidate = 60;
@@ -32,10 +31,7 @@ const locations = [
 ];
 
 export default async function HomePage() {
-  const [cities, featured] = await Promise.all([
-    getCachedCityOptions(),
-    getCachedFeatured(8),
-  ]);
+  const featured = await getCachedFeatured(8);
 
   return (
     <div>
@@ -50,7 +46,7 @@ export default async function HomePage() {
                 Verified PGs. Real photos. Real availability.
               </p>
               <div className="mt-6">
-                <HeroSearch cities={cities.map((c) => ({ name: c.name, slug: c.slug }))} />
+                <HeroSearch />
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 {QUICK_CHIPS.map((item) => (

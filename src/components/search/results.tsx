@@ -25,9 +25,12 @@ export async function SearchResults({
       : [];
   const blank = (value: string | string[] | undefined) =>
     !value || value === "" ? undefined : value;
+  const qParam = Array.isArray(raw.q) ? raw.q[0] : raw.q;
+  const q = qParam && qParam !== "" ? qParam : undefined;
   const parsed = searchFiltersSchema.safeParse({
     city,
     area,
+    q,
     budgetMax: blank(raw.budgetMax),
     sharing: blank(raw.sharing),
     pgType: blank(raw.pgType),
@@ -38,8 +41,11 @@ export async function SearchResults({
     page: blank(raw.page),
     food: blank(raw.food),
   });
-  const filters = parsed.success ? parsed.data : { city, area };
+  const filters = parsed.success ? parsed.data : { city, area, q };
   const { results, total } = await searchProperties(filters);
+  const displayHeading = q
+    ? `PGs near “${q}”`
+    : heading.replace(/^PGs in /, "");
 
   return (
     <div className="container-pg py-4 pb-24 md:py-8">
@@ -51,7 +57,7 @@ export async function SearchResults({
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-xl font-semibold">{heading.replace(/^PGs in /, "")}</h1>
+        <h1 className="text-xl font-semibold">{displayHeading}</h1>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{total} PGs found</p>
       <div className="mt-4">

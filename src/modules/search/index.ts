@@ -12,10 +12,12 @@ import { slugify } from "@/lib/utils";
 import { generateFromCounts, type RoomSpec } from "@/modules/inventory";
 import { HttpError } from "@/lib/rbac";
 import { SEARCH_PAGE_SIZE } from "@/lib/constants";
+import { matchAreasForQuery } from "@/modules/locations";
 
 export const searchFiltersSchema = z.object({
   city: z.string().optional(),
   area: z.string().optional(),
+  q: z.string().optional(),
   budgetMax: z.coerce.number().optional(),
   budgetMin: z.coerce.number().optional(),
   sharing: z.enum(["SINGLE", "DOUBLE", "TRIPLE", "FOUR"]).optional(),
@@ -33,6 +35,13 @@ export const searchFiltersSchema = z.object({
   featured: z.enum(["true", "false"]).optional(),
   near: z.string().optional(),
 });
+
+const VERIFICATION_RANK: Record<VerificationLevel, number> = {
+  UNVERIFIED: 0,
+  OWNER_VERIFIED: 1,
+  PROPERTY_VERIFIED: 2,
+  PGDOOR_VERIFIED: 3,
+};
 
 export type SearchFilters = z.infer<typeof searchFiltersSchema>;
 
@@ -141,12 +150,30 @@ export async function searchProperties(filters: SearchFilters) {
     status: PropertyStatus.PUBLISHED,
   };
 
-  if (filters.city) {
-    where.city = { slug: filters.city };
+  const q = filters.q?.trim();
+  let areaScores = new Map<string, number>();
+
+  if (q) {
+    const matched = await matchAreasForQuery(q);
+    if (matched.length === 0) {
+      return {
+        total: 0,
+        page,
+        pageSize: SEARCH_PAGE_SIZE,
+        results: [],
+      };
+    }
+    areaScores = new Map(matched.map((a) => [a.id, a.score]));
+    where.areaId = { in: matched.map((a) => a.id) };
+  } else {
+    if (filters.city) {
+      where.city = { slug: filters.city };
+    }
+    if (filters.area) {
+      where.area = { slug: filters.area };
+    }
   }
-  if (filters.area) {
-    where.area = { slug: filters.area };
-  }
+
   if (filters.budgetMax) {
     where.minRent = { ...(where.minRent as object), lte: filters.budgetMax };
   }
@@ -196,6 +223,9 @@ export async function searchProperties(filters: SearchFilters) {
     }
   }
 
+  const useAreaRelevance =
+    Boolean(q) && (!filters.sort || filters.sort === "relevance");
+
   let orderBy: Prisma.PropertyOrderByWithRelationInput[] = [
     { featured: "desc" },
     { verificationLevel: "desc" },
@@ -207,6 +237,39 @@ export async function searchProperties(filters: SearchFilters) {
   if (filters.sort === "rating") orderBy = [{ ratingAvg: "desc" }];
   if (filters.sort === "newest") orderBy = [{ publishedAt: "desc" }];
   if (filters.sort === "freshness") orderBy = [{ availabilityConfirmedAt: "desc" }];
+
+  if (useAreaRelevance) {
+    const rows = await prisma.property.findMany({
+      where,
+      include: cardInclude,
+    });
+
+    rows.sort((a, b) => {
+      const scoreA = areaScores.get(a.areaId) ?? 0;
+      const scoreB = areaScores.get(b.areaId) ?? 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      if (Number(b.featured) !== Number(a.featured)) {
+        return Number(b.featured) - Number(a.featured);
+      }
+      const verDiff =
+        VERIFICATION_RANK[b.verificationLevel] - VERIFICATION_RANK[a.verificationLevel];
+      if (verDiff !== 0) return verDiff;
+      const availDiff =
+        b.availabilityConfirmedAt.getTime() - a.availabilityConfirmedAt.getTime();
+      if (availDiff !== 0) return availDiff;
+      return b.ratingAvg - a.ratingAvg;
+    });
+
+    const total = rows.length;
+    const pageRows = rows.slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
+
+    return {
+      total,
+      page,
+      pageSize: SEARCH_PAGE_SIZE,
+      results: pageRows.map(toPublicCard),
+    };
+  }
 
   const [total, rows] = await Promise.all([
     prisma.property.count({ where }),

@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     const parsed = searchFiltersSchema.parse({
       city: url.searchParams.get("city") ?? undefined,
       area: url.searchParams.get("area") ?? undefined,
+      q: url.searchParams.get("q") ?? undefined,
       budgetMax: url.searchParams.get("budgetMax") ?? undefined,
       budgetMin: url.searchParams.get("budgetMin") ?? undefined,
       sharing: url.searchParams.get("sharing") ?? undefined,

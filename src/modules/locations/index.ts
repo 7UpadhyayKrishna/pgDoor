@@ -49,3 +49,72 @@ export async function listLandmarks(cityId?: string) {
     orderBy: { name: "asc" },
   });
 }
+
+function normalizeQuery(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Higher is better: exact 100, starts-with 80, word-prefix 60, contains 40. */
+export function scoreAreaMatch(query: string, areaName: string) {
+  const q = normalizeQuery(query);
+  if (!q) return 0;
+  const name = normalizeQuery(areaName);
+  if (!name) return 0;
+  if (name === q) return 100;
+  if (name.startsWith(q)) return 80;
+  const words = name.split(" ");
+  if (words.some((w) => w.startsWith(q))) return 60;
+  if (name.includes(q)) return 40;
+  return 0;
+}
+
+export type AreaSuggestion = {
+  id: string;
+  name: string;
+  slug: string;
+  cityName: string;
+  citySlug: string;
+  score: number;
+  href: string;
+};
+
+async function scoredAreas(query: string): Promise<AreaSuggestion[]> {
+  const q = normalizeQuery(query);
+  if (!q) return [];
+
+  const cities = await listCities();
+  const matches: AreaSuggestion[] = [];
+
+  for (const city of cities) {
+    for (const area of city.areas) {
+      const score = scoreAreaMatch(q, area.name);
+      if (score <= 0) continue;
+      matches.push({
+        id: area.id,
+        name: area.name,
+        slug: area.slug,
+        cityName: city.name,
+        citySlug: city.slug,
+        score,
+        href: `/pgs/${city.slug}/${area.slug}`,
+      });
+    }
+  }
+
+  matches.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.name.localeCompare(b.name);
+  });
+
+  return matches;
+}
+
+export async function suggestAreas(query: string, limit = 8) {
+  const matches = await scoredAreas(query);
+  return matches.slice(0, limit);
+}
+
+/** All matching areas for free-text PG search ranking. */
+export async function matchAreasForQuery(query: string) {
+  return scoredAreas(query);
+}

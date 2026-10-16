@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
+import { AreaSearch } from "@/components/search/area-search";
 import { NAV } from "@/lib/constants";
 import type { AuthUser } from "@/lib/rbac";
 import { canAccessAdmin, canAccessOwner } from "@/lib/rbac";
@@ -11,10 +12,10 @@ export { Logo };
 export function SiteHeader({ user }: { user: AuthUser | null }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-white">
-      <div className="container-pg flex h-16 items-center justify-between gap-4">
-        <div className="flex items-center gap-8">
+      <div className="container-pg flex h-16 items-center gap-3 md:gap-4">
+        <div className="flex shrink-0 items-center gap-6 lg:gap-8">
           <Logo />
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-ink/70">
+          <nav className="hidden items-center gap-6 text-sm font-medium text-ink/70 lg:flex">
             {NAV.desktop.map((item) => (
               <Link key={item.href} href={item.href} className="hover:text-ink">
                 {item.label}
@@ -22,7 +23,14 @@ export function SiteHeader({ user }: { user: AuthUser | null }) {
             ))}
           </nav>
         </div>
-        <div className="flex items-center gap-2">
+
+        <AreaSearch
+          variant="header"
+          className="min-w-0 flex-1 max-w-xl"
+          placeholder="Search by area"
+        />
+
+        <div className="flex shrink-0 items-center gap-2">
           <Button asChild variant="ghost" size="icon" className="hidden sm:flex">
             <Link href="/saved" aria-label="Saved PGs">
               <Heart className="h-5 w-5" />
