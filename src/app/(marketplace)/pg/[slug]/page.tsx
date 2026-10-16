@@ -3,10 +3,12 @@ import { ArrowLeft, Heart, MapPin, Star } from "lucide-react";
 import { Gallery } from "@/components/listing/gallery";
 import { ShareListingButton } from "@/components/listing/share-listing-button";
 import { StickyCta } from "@/components/listing/sticky-cta";
+import { NearbyPlaces } from "@/components/search/nearby-places";
 import { Badge } from "@/components/ui/badge";
 import { SHARING_LABEL } from "@/lib/constants";
 import { formatInr, formatUpdatedAt } from "@/lib/format";
 import { mapsEmbedUrl } from "@/lib/maps";
+import { getNearbyForArea } from "@/modules/locations";
 import { getPublishedBySlug, incrementView } from "@/modules/properties";
 import { ReportListing } from "@/components/listing/report-listing";
 import { notFound } from "next/navigation";
@@ -22,6 +24,8 @@ export default async function PgDetailPage({
   const property = await getPublishedBySlug(slug);
   if (!property) notFound();
   void incrementView(slug);
+
+  const nearby = await getNearbyForArea(property.areaId);
 
   const primaryRoom = property.roomTypes[0];
   const scores = property.reviews[0]?.scores;
@@ -136,6 +140,12 @@ export default async function PgDetailPage({
               ))}
             </ul>
           </section>
+
+          {nearby ? (
+            <div className="mt-8">
+              <NearbyPlaces areaName={nearby.areaName} places={nearby.places} />
+            </div>
+          ) : null}
 
           <section className="mt-8">
             <h2 className="text-lg font-semibold">Where you&apos;ll live</h2>

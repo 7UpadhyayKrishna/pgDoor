@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
+import { fetchNearbyPlaces, type NearbyPlace } from "@/lib/places";
 
 export async function listCities() {
   return prisma.city.findMany({
@@ -117,4 +118,35 @@ export async function suggestAreas(query: string, limit = 8) {
 /** All matching areas for free-text PG search ranking. */
 export async function matchAreasForQuery(query: string) {
   return scoredAreas(query);
+}
+
+async function loadNearbyForArea(areaId: string): Promise<{
+  areaName: string;
+  places: NearbyPlace[];
+} | null> {
+  const area = await prisma.area.findUnique({
+    where: { id: areaId },
+    select: { id: true, name: true, latitude: true, longitude: true },
+  });
+  if (!area?.latitude || area.longitude == null) return null;
+
+  try {
+    const places = await fetchNearbyPlaces({
+      lat: area.latitude,
+      lng: area.longitude,
+    });
+    if (!places.length) return null;
+    return { areaName: area.name, places };
+  } catch {
+    return null;
+  }
+}
+
+/** Cached nearby places for an area (6h). Returns null if unavailable. */
+export async function getNearbyForArea(areaId: string) {
+  return unstable_cache(
+    () => loadNearbyForArea(areaId),
+    ["nearby-places", areaId],
+    { revalidate: 21600 },
+  )();
 }

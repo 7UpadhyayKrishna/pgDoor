@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { FilterControls, FilterForm } from "@/components/search/filters";
+import { NearbyPlaces } from "@/components/search/nearby-places";
 import { PgCard } from "@/components/search/pg-card";
 import { searchFiltersSchema, searchProperties } from "@/modules/search";
+import { getAreaBySlugs, getNearbyForArea } from "@/modules/locations";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +44,18 @@ export async function SearchResults({
     food: blank(raw.food),
   });
   const filters = parsed.success ? parsed.data : { city, area, q };
-  const { results, total } = await searchProperties(filters);
+
+  const [search, nearby] = await Promise.all([
+    searchProperties(filters),
+    city && area
+      ? getAreaBySlugs(city, area).then(async (record) => {
+          if (!record) return null;
+          return getNearbyForArea(record.id);
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const { results, total } = search;
   const displayHeading = q
     ? `PGs near “${q}”`
     : heading.replace(/^PGs in /, "");
@@ -63,6 +76,13 @@ export async function SearchResults({
       <div className="mt-4">
         <FilterControls />
       </div>
+
+      {nearby ? (
+        <div className="mt-6">
+          <NearbyPlaces areaName={nearby.areaName} places={nearby.places} />
+        </div>
+      ) : null}
+
       <div className="mt-6 grid gap-6 lg:grid-cols-[280px_1fr]">
         <aside className="hidden h-fit rounded-[18px] bg-white p-5 shadow-card lg:block">
           <FilterForm />
