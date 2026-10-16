@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LocationAutocomplete, type SelectedPlace } from "@/components/owner/location-autocomplete";
+import { resolveCityAndArea } from "@/lib/place-resolve";
 
 type City = {
   id: string;
@@ -32,8 +34,10 @@ export function OwnerWizard({
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [cityId, setCityId] = useState(cities[0]?.id ?? "");
-  const [areaId, setAreaId] = useState(cities[0]?.areas[0]?.id ?? "");
+  const [cityId, setCityId] = useState("");
+  const [areaId, setAreaId] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [pgType, setPgType] = useState("UNISEX");
   const [foodIncluded, setFoodIncluded] = useState(true);
   const [maintenanceCharge, setMaintenanceCharge] = useState("500");
@@ -50,10 +54,27 @@ export function OwnerWizard({
     })),
   );
 
-  const city = cities.find((c) => c.id === cityId);
-  const area = city?.areas.find((a) => a.id === areaId);
+  const locationSelected = Boolean(address && cityId && areaId && latitude != null && longitude != null);
+
+  function onPlaceSelect(place: SelectedPlace) {
+    const resolved = resolveCityAndArea(cities, place);
+    setAddress(place.address);
+    setLatitude(place.latitude);
+    setLongitude(place.longitude);
+    setCityId(resolved.cityId);
+    setAreaId(resolved.areaId);
+    if (!resolved.cityId || !resolved.areaId) {
+      setError("We could not map this location to a supported NCR city. Try another nearby place.");
+    } else {
+      setError("");
+    }
+  }
 
   async function publish() {
+    if (!locationSelected || latitude == null || longitude == null) {
+      setError("Select a location from the suggestions");
+      return;
+    }
     setLoading(true);
     setError("");
     const payload = {
@@ -61,8 +82,8 @@ export function OwnerWizard({
       address,
       cityId,
       areaId,
-      latitude: area?.latitude ?? city?.latitude ?? 28.4595,
-      longitude: area?.longitude ?? city?.longitude ?? 77.0266,
+      latitude,
+      longitude,
       pgType,
       foodIncluded,
       maintenanceCharge: Number(maintenanceCharge) || undefined,
@@ -109,44 +130,14 @@ export function OwnerWizard({
             <Label>PG name</Label>
             <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div>
-            <Label>Address</Label>
-            <Input className="mt-1" value={address} onChange={(e) => setAddress(e.target.value)} />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label>City</Label>
-              <select
-                className="mt-1 h-11 w-full rounded-xl border px-3 text-sm"
-                value={cityId}
-                onChange={(e) => {
-                  setCityId(e.target.value);
-                  const next = cities.find((c) => c.id === e.target.value);
-                  setAreaId(next?.areas[0]?.id ?? "");
-                }}
-              >
-                {cities.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Area</Label>
-              <select
-                className="mt-1 h-11 w-full rounded-xl border px-3 text-sm"
-                value={areaId}
-                onChange={(e) => setAreaId(e.target.value)}
-              >
-                {city?.areas.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <LocationAutocomplete value={address} onSelect={onPlaceSelect} />
+          {address && cityId ? (
+            <p className="text-xs text-muted-foreground">
+              Mapped to{" "}
+              {cities.find((c) => c.id === cityId)?.areas.find((a) => a.id === areaId)?.name ?? "area"},{" "}
+              {cities.find((c) => c.id === cityId)?.name}
+            </p>
+          ) : null}
           <div>
             <Label>PG type</Label>
             <select
@@ -286,9 +277,20 @@ export function OwnerWizard({
           Back
         </Button>
         {step < 3 ? (
-          <Button onClick={() => setStep((s) => s + 1)}>Continue</Button>
+          <Button
+            onClick={() => {
+              if (step === 0 && !locationSelected) {
+                setError("Select a location from the suggestions");
+                return;
+              }
+              setError("");
+              setStep((s) => s + 1);
+            }}
+          >
+            Continue
+          </Button>
         ) : (
-          <Button onClick={publish} disabled={loading || name.length < 3}>
+          <Button onClick={publish} disabled={loading || name.length < 3 || !locationSelected}>
             Publish listing
           </Button>
         )}

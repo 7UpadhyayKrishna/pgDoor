@@ -44,7 +44,11 @@ export async function SearchResults({
   return (
     <div className="container-pg py-4 pb-24 md:py-8">
       <div className="flex items-center gap-3">
-        <Link href="/" className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-white lg:hidden">
+        <Link
+          href="/"
+          aria-label="Back to homepage"
+          className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-white"
+        >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <h1 className="text-xl font-semibold">{heading.replace(/^PGs in /, "")}</h1>

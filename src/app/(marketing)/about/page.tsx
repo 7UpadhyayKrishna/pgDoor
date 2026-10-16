@@ -21,7 +21,7 @@ function StaticPage({
 
 export default function AboutPage() {
   return (
-    <StaticPage title="About pgDoor">
+    <StaticPage title="About Us">
       <p>
         pgDoor is a PG discovery marketplace for NCR. We focus on verified listings, transparent
         pricing, and availability that is actually up to date.

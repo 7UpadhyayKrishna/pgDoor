@@ -8,7 +8,7 @@ const columns = [
       { href: "/pgs", label: "Find PGs" },
       { href: "/owners/register", label: "List Your PG" },
       { href: "/pgs/gurgaon", label: "PGs by City" },
-      { href: "/about", label: "About" },
+      { href: "/about", label: "About Us" },
       { href: "/contact", label: "Contact" },
       { href: "/help", label: "Help Center" },
     ],
@@ -33,8 +33,7 @@ const columns = [
   {
     title: "Company",
     links: [
-      { href: "/about", label: "About pgDoor" },
-      { href: "/contact", label: "Careers" },
+      { href: "/about", label: "About Us" },
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
       { href: "/help", label: "Refund Policy" },

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
 
 export async function listCities() {
   return prisma.city.findMany({
@@ -9,6 +10,21 @@ export async function listCities() {
     },
   });
 }
+
+/** Lightweight city list for search dropdowns (no areas). */
+export async function listCityOptions() {
+  return prisma.city.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+    select: { name: true, slug: true },
+  });
+}
+
+export const getCachedCityOptions = unstable_cache(
+  async () => listCityOptions(),
+  ["city-options"],
+  { revalidate: 300 },
+);
 
 export async function getCityBySlug(slug: string) {
   return prisma.city.findUnique({

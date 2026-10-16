@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowLeft, Heart, MapPin, Share2, Star } from "lucide-react";
+import { ArrowLeft, Heart, MapPin, Star } from "lucide-react";
 import { Gallery } from "@/components/listing/gallery";
+import { ShareListingButton } from "@/components/listing/share-listing-button";
 import { StickyCta } from "@/components/listing/sticky-cta";
 import { Badge } from "@/components/ui/badge";
 import { SHARING_LABEL } from "@/lib/constants";
@@ -20,7 +21,7 @@ export default async function PgDetailPage({
   const { slug } = await params;
   const property = await getPublishedBySlug(slug);
   if (!property) notFound();
-  await incrementView(slug);
+  void incrementView(slug);
 
   const primaryRoom = property.roomTypes[0];
   const scores = property.reviews[0]?.scores;
@@ -33,25 +34,31 @@ export default async function PgDetailPage({
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex gap-1">
-          <button type="button" className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" aria-label="Share">
-            <Share2 className="h-5 w-5" />
-          </button>
+          <ShareListingButton slug={property.slug} name={property.name} />
           <Link href="/saved" className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" aria-label="Save">
             <Heart className="h-5 w-5" />
           </Link>
         </div>
       </div>
 
-      <div className="md:container-pg">
+      <div className="container-pg">
         <Gallery photos={property.photos} name={property.name} />
       </div>
 
       <div className="container-pg mt-5 grid gap-8 sm:mt-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-ink sm:text-3xl">{property.name}</h1>
-          <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground sm:text-base">
-            <MapPin className="h-4 w-4 shrink-0" />
-            {property.area.name}, {property.city.name}
+          <p className="mt-1 flex items-start gap-1 text-sm text-muted-foreground sm:text-base">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              {property.area.name}, {property.city.name}
+              {property.address ? (
+                <>
+                  <br />
+                  <span className="text-sm">{property.address}</span>
+                </>
+              ) : null}
+            </span>
           </p>
           {property.ratingAvg > 0 ? (
             <p className="mt-2 flex items-center gap-1 font-medium">

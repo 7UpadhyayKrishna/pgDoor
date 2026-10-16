@@ -10,7 +10,7 @@ export default async function MarketplaceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ soft: true });
   return (
     <>
       <SiteHeader user={user} />

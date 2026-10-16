@@ -5,10 +5,10 @@ import { HeroSearch } from "@/components/search/hero-search";
 import { PgCard } from "@/components/search/pg-card";
 import { Button } from "@/components/ui/button";
 import { QUICK_CHIPS } from "@/lib/constants";
-import { listCities } from "@/modules/locations";
-import { getFeatured } from "@/modules/search";
+import { getCachedCityOptions } from "@/modules/locations";
+import { getCachedFeatured } from "@/modules/search";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 const locations = [
   {
@@ -32,7 +32,10 @@ const locations = [
 ];
 
 export default async function HomePage() {
-  const [cities, featured] = await Promise.all([listCities(), getFeatured(8)]);
+  const [cities, featured] = await Promise.all([
+    getCachedCityOptions(),
+    getCachedFeatured(8),
+  ]);
 
   return (
     <div>

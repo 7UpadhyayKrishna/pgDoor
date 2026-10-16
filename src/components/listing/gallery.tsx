@@ -21,12 +21,13 @@ export function Gallery({
     .filter((i) => i !== active)
     .slice(0, 3);
   const hasSides = sideIndexes.length > 0;
+  const sideRows = Math.max(1, sideIndexes.length);
 
   return (
     <div>
       {/* Mobile carousel */}
       <div className="relative md:hidden">
-        <div className="relative aspect-[4/3] max-h-[55vh] overflow-hidden bg-canvas">
+        <div className="relative aspect-[4/3] max-h-[55vh] overflow-hidden rounded-[20px] bg-canvas">
           <Image
             src={main.url}
             alt={main.alt ?? name}
@@ -83,7 +84,10 @@ export function Gallery({
           </span>
         </div>
         {hasSides ? (
-          <div className="grid h-full min-h-0 grid-rows-3 gap-2">
+          <div
+            className="grid h-full min-h-0 gap-2"
+            style={{ gridTemplateRows: `repeat(${sideRows}, minmax(0, 1fr))` }}
+          >
             {sideIndexes.map((index) => {
               const photo = photos[index];
               return (
@@ -103,9 +107,6 @@ export function Gallery({
                 </button>
               );
             })}
-            {Array.from({ length: Math.max(0, 3 - sideIndexes.length) }).map((_, i) => (
-              <div key={`empty-${i}`} className="rounded-[20px] bg-canvas" />
-            ))}
           </div>
         ) : null}
       </div>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { unstable_cache } from "next/cache";
 import {
   PgType,
   Prisma,
@@ -43,6 +44,24 @@ const publicInclude = {
   roomTypes: { orderBy: { rent: "asc" as const } },
 } satisfies Prisma.PropertyInclude;
 
+/** Minimal include for listing cards (homepage / search grids). */
+const cardInclude = {
+  city: { select: { name: true, slug: true } },
+  area: { select: { name: true, slug: true } },
+  photos: { orderBy: { sortOrder: "asc" as const }, take: 1 },
+  roomTypes: {
+    orderBy: { rent: "asc" as const },
+    take: 1,
+    select: {
+      sharingType: true,
+      rent: true,
+      deposit: true,
+      availableBeds: true,
+      totalBeds: true,
+    },
+  },
+} satisfies Prisma.PropertyInclude;
+
 export function toPublicCard(property: {
   id: string;
   slug: string;
@@ -66,7 +85,7 @@ export function toPublicCard(property: {
   availabilityConfirmedAt: Date;
   moveInFrom: Date | null;
   photos: { url: string; alt: string | null }[];
-  amenities: { amenity: { name: string; slug: string; group: string } }[];
+  amenities?: { amenity: { name: string; slug: string; group: string } }[];
   roomTypes: {
     sharingType: RoomSharingType;
     rent: number;
@@ -101,7 +120,7 @@ export function toPublicCard(property: {
       url: photo.url,
       alt: photo.alt ?? property.name,
     })),
-    amenities: property.amenities.map((row) => ({
+    amenities: (property.amenities ?? []).map((row) => ({
       name: row.amenity.name,
       slug: row.amenity.slug,
       group: row.amenity.group,
@@ -193,7 +212,7 @@ export async function searchProperties(filters: SearchFilters) {
     prisma.property.count({ where }),
     prisma.property.findMany({
       where,
-      include: publicInclude,
+      include: cardInclude,
       orderBy,
       skip: (page - 1) * SEARCH_PAGE_SIZE,
       take: SEARCH_PAGE_SIZE,
@@ -229,12 +248,18 @@ export async function getPublishedBySlug(slug: string) {
 export async function getFeatured(limit = 8) {
   const rows = await prisma.property.findMany({
     where: { status: "PUBLISHED" },
-    include: publicInclude,
+    include: cardInclude,
     orderBy: [{ featured: "desc" }, { ratingAvg: "desc" }],
     take: limit,
   });
   return rows.map(toPublicCard);
 }
+
+export const getCachedFeatured = unstable_cache(
+  async (limit = 8) => getFeatured(limit),
+  ["featured-pgs"],
+  { revalidate: 60 },
+);
 
 export async function uniqueSlug(name: string, areaName: string, cityName: string) {
   const base = slugify(`${name} ${areaName} ${cityName}`);

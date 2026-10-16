@@ -59,15 +59,31 @@ export async function destroySession() {
   jar.delete(SESSION_COOKIE);
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+export async function getCurrentUser(opts?: {
+  /** JWT-only check — skips DB session lookup (for public layouts). */
+  soft?: boolean;
+}): Promise<AuthUser | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
+  let payload: { id: string; role: UserRole };
   try {
-    await verifyAuthToken(token);
+    payload = await verifyAuthToken(token);
   } catch {
     return null;
+  }
+
+  if (opts?.soft) {
+    return {
+      id: payload.id,
+      phone: "",
+      name: null,
+      email: null,
+      role: payload.role,
+      phoneVerified: true,
+      ownerProfileId: payload.role === "OWNER" || payload.role === "ADMIN" ? "soft" : null,
+    };
   }
 
   let session;

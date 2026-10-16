@@ -162,6 +162,9 @@ export async function requestVisit(
   if (Number.isNaN(scheduledAt.getTime())) {
     throw new HttpError(400, "Pick a valid visit time");
   }
+  if (scheduledAt.getTime() <= Date.now()) {
+    throw new HttpError(400, "Visit must be in the future");
+  }
 
   let lead = await prisma.lead.findFirst({
     where: { seekerId, propertyId: input.propertyId },
