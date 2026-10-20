@@ -1,25 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { List, Map as MapIcon, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Map as MapIcon, X } from "lucide-react";
 import { ExploreMap } from "@/components/search/explore-map";
 import { PgCard } from "@/components/search/pg-card";
 import { Button } from "@/components/ui/button";
 import { formatInr } from "@/lib/format";
-import { SHARING_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { toPublicCard } from "@/modules/search";
+import type { MapPin, toPublicCard } from "@/modules/search";
 
 type Card = ReturnType<typeof toPublicCard>;
 
 export function ExploreShell({
   properties,
+  pins,
+  page,
+  pageSize,
+  total,
   destination,
 }: {
   properties: Card[];
+  pins: MapPin[];
+  page: number;
+  pageSize: number;
+  total: number;
   destination?: { lat: number; lng: number; label?: string; mode?: string } | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -29,9 +36,18 @@ export function ExploreShell({
   const params = useSearchParams();
 
   const selected = useMemo(
-    () => properties.find((p) => p.id === selectedId) ?? null,
-    [properties, selectedId],
+    () => pins.find((p) => p.id === selectedId) ?? null,
+    [pins, selectedId],
   );
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  function pageHref(target: number) {
+    const next = new URLSearchParams(params.toString());
+    if (target <= 1) next.delete("page");
+    else next.set("page", String(target));
+    const qs = next.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }
 
   function onSearchArea(bounds: {
     south: number;
@@ -83,7 +99,7 @@ export function ExploreShell({
           )}
         >
           <ExploreMap
-            properties={properties}
+            pins={pins}
             selectedId={selectedId}
             onSelect={(id) => {
               setSelectedId(id);
@@ -128,6 +144,24 @@ export function ExploreShell({
               </div>
             ))
           )}
+
+          {totalPages > 1 ? (
+            <nav
+              aria-label="Search results pages"
+              className="flex items-center justify-between gap-3 pt-2"
+            >
+              <PageLink href={pageHref(page - 1)} disabled={page <= 1}>
+                <ChevronLeft className="h-4 w-4" /> Previous
+              </PageLink>
+              <p className="text-sm text-muted-foreground">
+                Page {page} of {totalPages} · {(page - 1) * pageSize + 1}–
+                {Math.min(page * pageSize, total)} of {total}
+              </p>
+              <PageLink href={pageHref(page + 1)} disabled={page >= totalPages}>
+                Next <ChevronRight className="h-4 w-4" />
+              </PageLink>
+            </nav>
+          ) : null}
         </div>
       </div>
 
@@ -147,15 +181,39 @@ export function ExploreShell({
   );
 }
 
+function PageLink({
+  href,
+  disabled,
+  children,
+}: {
+  href: string;
+  disabled: boolean;
+  children: ReactNode;
+}) {
+  const className =
+    "inline-flex h-10 items-center gap-1 rounded-full bg-white px-4 text-sm font-medium ring-1 ring-border";
+  if (disabled) {
+    return (
+      <span aria-disabled className={cn(className, "cursor-not-allowed opacity-40")}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} scroll className={cn(className, "hover:bg-canvas")}>
+      {children}
+    </Link>
+  );
+}
+
 function SelectedPreview({
   property,
   onClose,
 }: {
-  property: Card;
+  property: MapPin;
   onClose: () => void;
 }) {
-  const photo = property.photos[0]?.url;
-  const sharing = property.roomTypes[0]?.sharingType;
+  const photo = property.photo;
 
   return (
     <div>
@@ -163,7 +221,7 @@ function SelectedPreview({
         <div className="min-w-0">
           <p className="truncate font-semibold text-ink">{property.name}</p>
           <p className="text-sm text-muted-foreground">
-            {property.area.name}, {property.city.name}
+            {property.areaName}, {property.cityName}
           </p>
         </div>
         <button
@@ -183,11 +241,8 @@ function SelectedPreview({
         ) : null}
         <div className="min-w-0 text-sm">
           <p className="font-semibold">{formatInr(property.minRent)}/mo</p>
-          {property.commute ? (
-            <p className="text-muted-foreground">{property.commute.text}</p>
-          ) : null}
-          {sharing ? (
-            <p className="text-muted-foreground">{SHARING_LABEL[sharing]}</p>
+          {property.commuteText ? (
+            <p className="text-muted-foreground">{property.commuteText}</p>
           ) : null}
         </div>
       </div>

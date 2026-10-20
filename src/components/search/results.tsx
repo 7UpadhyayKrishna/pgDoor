@@ -67,7 +67,7 @@ export async function SearchResults({
       : Promise.resolve(null),
   ]);
 
-  const { results, total, destination } = search;
+  const { results, pins, total, page, pageSize, destination } = search;
   const destLabel = single(raw.destLabel)?.trim();
   const hasDestination = Boolean(destination?.lat && destination?.lng);
   const displayHeading = destLabel
@@ -125,7 +125,14 @@ export async function SearchResults({
               </div>
             }
           >
-            <ExploreShell properties={results} destination={destination} />
+            <ExploreShell
+              properties={results}
+              pins={pins}
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              destination={destination}
+            />
           </Suspense>
         </div>
       </div>

@@ -3,11 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { loadGoogleMaps, formatRentPin, getMapsBrowserKey } from "@/lib/google-maps";
-import type { toPublicCard } from "@/modules/search";
+import type { MapPin } from "@/modules/search";
 import type { MapPoiLayer } from "@/lib/places";
 import { cn } from "@/lib/utils";
-
-type Card = ReturnType<typeof toPublicCard>;
 
 type LandmarkPin = {
   id: string;
@@ -73,14 +71,14 @@ function createDotElement(color: string, title: string) {
 }
 
 export function ExploreMap({
-  properties,
+  pins,
   selectedId,
   onSelect,
   destination,
   onSearchArea,
   className,
 }: {
-  properties: Card[];
+  pins: MapPin[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   destination?: { lat: number; lng: number; label?: string } | null;
@@ -89,7 +87,10 @@ export function ExploreMap({
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const markersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
+  const styledSelectedId = useRef<string | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
   const clustererRef = useRef<MarkerClusterer | null>(null);
   const destMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const poiMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
@@ -103,7 +104,7 @@ export function ExploreMap({
   const [pois, setPois] = useState<PoiPin[]>([]);
   const [landmarks, setLandmarks] = useState<LandmarkPin[]>([]);
 
-  const selected = properties.find((p) => p.id === selectedId) ?? null;
+  const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -122,8 +123,8 @@ export function ExploreMap({
 
       const center = destination
         ? { lat: destination.lat, lng: destination.lng }
-        : properties[0]
-          ? { lat: properties[0].latitude, lng: properties[0].longitude }
+        : pins[0]
+          ? { lat: pins[0].latitude, lng: pins[0].longitude }
           : { lat: 28.6139, lng: 77.209 };
 
       const map = new g.maps.Map(mapRef.current, {
@@ -163,46 +164,55 @@ export function ExploreMap({
     markersRef.current.forEach((m) => {
       m.map = null;
     });
-    markersRef.current = [];
+    markersRef.current = new Map();
     clustererRef.current?.clearMarkers();
+    styledSelectedId.current = null;
 
-    const markers = properties.map((p) => {
+    const markers = pins.map((p) => {
       const marker = new AdvancedMarkerElement({
         map: null,
         position: { lat: p.latitude, lng: p.longitude },
-        content: createPricePinElement(p.minRent, p.id === selectedId),
+        content: createPricePinElement(p.minRent, false),
         title: p.name,
-        zIndex: p.id === selectedId ? 10 : 1,
+        zIndex: 1,
       });
-      marker.addListener("click", () => onSelect(p.id));
+      marker.addListener("click", () => onSelectRef.current(p.id));
+      markersRef.current.set(p.id, marker);
       return marker;
     });
 
-    markersRef.current = markers;
     clustererRef.current = new MarkerClusterer({ map, markers });
 
-    if (properties.length > 0 && !selectedId) {
+    if (pins.length > 0) {
       const bounds = new google.maps.LatLngBounds();
-      properties.forEach((p) => bounds.extend({ lat: p.latitude, lng: p.longitude }));
+      pins.forEach((p) => bounds.extend({ lat: p.latitude, lng: p.longitude }));
       if (destination) bounds.extend({ lat: destination.lat, lng: destination.lng });
       map.fitBounds(bounds, 64);
     }
-  }, [ready, properties, selectedId, onSelect, destination]);
+  }, [ready, pins, destination]);
 
-  // Update selected pin style + pan
+  // Restyle only the previously and newly selected pins, then pan
   useEffect(() => {
-    if (!ready || !mapInstance.current || !selected) return;
-    markersRef.current.forEach((m, i) => {
-      const p = properties[i];
-      if (!p) return;
-      m.content = createPricePinElement(p.minRent, p.id === selectedId);
-      m.zIndex = p.id === selectedId ? 10 : 1;
-    });
+    if (!ready || !mapInstance.current) return;
+    const restyle = (id: string | null, isSelected: boolean) => {
+      if (!id) return;
+      const marker = markersRef.current.get(id);
+      const pin = pins.find((p) => p.id === id);
+      if (!marker || !pin) return;
+      marker.content = createPricePinElement(pin.minRent, isSelected);
+      marker.zIndex = isSelected ? 10 : 1;
+    };
+    if (styledSelectedId.current !== selectedId) {
+      restyle(styledSelectedId.current, false);
+      restyle(selectedId, true);
+      styledSelectedId.current = selectedId;
+    }
+    if (!selected) return;
     mapInstance.current.panTo({ lat: selected.latitude, lng: selected.longitude });
     if ((mapInstance.current.getZoom() ?? 12) < 14) {
       mapInstance.current.setZoom(14);
     }
-  }, [selectedId, selected, ready, properties]);
+  }, [selectedId, selected, ready, pins]);
 
   // Destination marker
   useEffect(() => {
@@ -245,7 +255,7 @@ export function ExploreMap({
         if (data.landmarks) setLandmarks(data.landmarks);
       })
       .catch(() => undefined);
-  }, [ready, showSearchArea, properties.length]);
+  }, [ready, showSearchArea, pins.length]);
 
   // Landmark markers (metro / college / office)
   useEffect(() => {
@@ -280,8 +290,8 @@ export function ExploreMap({
       ? { lat: selected.latitude, lng: selected.longitude }
       : destination
         ? { lat: destination.lat, lng: destination.lng }
-        : properties[0]
-          ? { lat: properties[0].latitude, lng: properties[0].longitude }
+        : pins[0]
+          ? { lat: pins[0].latitude, lng: pins[0].longitude }
           : null;
     if (!anchor) return;
 
@@ -299,7 +309,7 @@ export function ExploreMap({
         .catch(() => setPois([]));
     }, 400);
     return () => clearTimeout(timer);
-  }, [ready, layers, selected, destination, properties]);
+  }, [ready, layers, selected, destination, pins]);
 
   // POI markers
   useEffect(() => {

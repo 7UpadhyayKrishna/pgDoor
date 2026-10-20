@@ -95,6 +95,62 @@ const cardInclude = {
   },
 } satisfies Prisma.PropertyInclude;
 
+/** Upper bound on pins sent to the explore map; the list itself stays paginated. */
+const MAP_PIN_LIMIT = 2000;
+
+const pinSelect = {
+  id: true,
+  slug: true,
+  name: true,
+  latitude: true,
+  longitude: true,
+  minRent: true,
+  city: { select: { name: true } },
+  area: { select: { name: true } },
+  photos: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { url: true } },
+} satisfies Prisma.PropertySelect;
+
+export type MapPin = {
+  id: string;
+  slug: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  minRent: number;
+  areaName: string;
+  cityName: string;
+  photo: string | null;
+  commuteText: string | null;
+};
+
+function toMapPin(
+  row: {
+    id: string;
+    slug: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    minRent: number;
+    city: { name: string };
+    area: { name: string };
+    photos: { url: string }[];
+  },
+  commute?: { text: string } | null,
+): MapPin {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    minRent: row.minRent,
+    areaName: row.area.name,
+    cityName: row.city.name,
+    photo: row.photos[0]?.url ?? null,
+    commuteText: commute?.text ?? null,
+  };
+}
+
 export type CardCommute = {
   minutes: number | null;
   distanceKm: number;
@@ -303,6 +359,7 @@ export async function searchProperties(filters: SearchFilters) {
         page,
         pageSize: SEARCH_PAGE_SIZE,
         results: [],
+        pins: [] as MapPin[],
         destination: null as null | {
           lat: number;
           lng: number;
@@ -374,6 +431,7 @@ export async function searchProperties(filters: SearchFilters) {
       page,
       pageSize: SEARCH_PAGE_SIZE,
       results: pageRows.map((row) => toPublicCard(row)),
+      pins: rows.slice(0, MAP_PIN_LIMIT).map((row) => toMapPin(row)),
       destination: destinationMeta,
     };
   }
@@ -459,6 +517,9 @@ export async function searchProperties(filters: SearchFilters) {
       page,
       pageSize: SEARCH_PAGE_SIZE,
       results: pageRows.map((item) => toPublicCard(item.row, item.commute)),
+      pins: enriched
+        .slice(0, MAP_PIN_LIMIT)
+        .map((item) => toMapPin(item.row, item.commute)),
       destination: destinationMeta,
     };
   }
@@ -484,11 +545,12 @@ export async function searchProperties(filters: SearchFilters) {
       page,
       pageSize: SEARCH_PAGE_SIZE,
       results: pageRows.map((row) => toPublicCard(row)),
+      pins: rows.slice(0, MAP_PIN_LIMIT).map((row) => toMapPin(row)),
       destination: destinationMeta,
     };
   }
 
-  const [total, rows] = await Promise.all([
+  const [total, rows, pinRows] = await Promise.all([
     prisma.property.count({ where }),
     prisma.property.findMany({
       where,
@@ -497,6 +559,12 @@ export async function searchProperties(filters: SearchFilters) {
       skip: (page - 1) * SEARCH_PAGE_SIZE,
       take: SEARCH_PAGE_SIZE,
     }),
+    prisma.property.findMany({
+      where,
+      select: pinSelect,
+      orderBy,
+      take: MAP_PIN_LIMIT,
+    }),
   ]);
 
   return {
@@ -504,6 +572,7 @@ export async function searchProperties(filters: SearchFilters) {
     page,
     pageSize: SEARCH_PAGE_SIZE,
     results: rows.map((row) => toPublicCard(row)),
+    pins: pinRows.map((row) => toMapPin(row)),
     destination: destinationMeta,
   };
 }
