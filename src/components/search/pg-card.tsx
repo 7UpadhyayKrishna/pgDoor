@@ -5,12 +5,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { Heart, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { SHARING_LABEL } from "@/lib/constants";
+import { SHARING_LABEL, STALE_AVAILABILITY_DAYS } from "@/lib/constants";
 import { formatInr, formatUpdatedAt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { toPublicCard } from "@/modules/search";
 
 type Card = ReturnType<typeof toPublicCard>;
+
+function isAvailabilityFresh(date: Date | string) {
+  const confirmed = new Date(date).getTime();
+  const cutoff = Date.now() - STALE_AVAILABILITY_DAYS * 24 * 60 * 60 * 1000;
+  return confirmed >= cutoff;
+}
 
 export function PgCard({
   property,
@@ -23,11 +29,17 @@ export function PgCard({
   const sharing = property.roomTypes[0]?.sharingType;
   const [saved, setSaved] = useState(false);
   const full = property.availableBeds <= 0;
+  const availabilityFresh = isAvailabilityFresh(property.availabilityConfirmedAt);
 
   return (
-    <article className={cn("group", variant === "rail" && "w-[260px] shrink-0")}>
-      <Link href={`/pg/${property.slug}`} className="block">
-        <div className="relative aspect-[4/3] overflow-hidden rounded-[18px] bg-canvas">
+    <article
+      className={cn(
+        "group rounded-[18px] bg-white p-3 shadow-card",
+        variant === "rail" && "w-[260px] shrink-0",
+      )}
+    >
+      <Link href={`/pg/${property.slug}`} className="block" onClick={(e) => e.stopPropagation()}>
+        <div className="relative aspect-[4/3] overflow-hidden rounded-[14px] bg-canvas">
           {photo ? (
             <Image
               src={photo}
@@ -42,11 +54,17 @@ export function PgCard({
               ✓ Verified
             </Badge>
           ) : null}
+          {availabilityFresh && !full ? (
+            <Badge className="absolute bottom-3 left-3 bg-white/95 text-ink">
+              Availability confirmed {formatUpdatedAt(property.availabilityConfirmedAt)}
+            </Badge>
+          ) : null}
           <button
             type="button"
             aria-label="Save"
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setSaved((v) => !v);
               fetch("/api/saved", {
                 method: "POST",
@@ -69,7 +87,11 @@ export function PgCard({
           <p className="text-sm font-semibold text-ink">
             {formatInr(property.minRent)}/month
             {sharing ? ` · ${SHARING_LABEL[sharing].replace(" Sharing", "")}` : ""}
+            {property.foodIncluded ? " · Food included" : ""}
           </p>
+          {property.commute ? (
+            <p className="text-sm font-medium text-primary">{property.commute.text}</p>
+          ) : null}
           {property.ratingAvg > 0 ? (
             <p className="flex items-center gap-1 text-sm text-ink">
               <Star className="h-3.5 w-3.5 fill-ink text-ink" />
@@ -81,7 +103,8 @@ export function PgCard({
               <span className="text-muted-foreground">Currently full</span>
             ) : (
               <span className="text-success">
-                {property.availableBeds} beds · updated {formatUpdatedAt(property.availabilityConfirmedAt)}
+                {property.availableBeds} beds · updated{" "}
+                {formatUpdatedAt(property.availabilityConfirmedAt)}
               </span>
             )}
           </p>

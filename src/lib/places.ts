@@ -14,6 +14,11 @@ export type PlaceDetails = {
   areaName: string | null;
 };
 
+const PLACES_API = "https://places.googleapis.com/v1";
+const NCR_CENTER = { latitude: 28.6139, longitude: 77.209 };
+/** Places API (New) caps locationBias circles at 50 km. */
+const NCR_BIAS_RADIUS_METERS = 50000;
+
 function placesKey() {
   const key = process.env.GOOGLE_MAPS_API_KEY;
   if (!key) {
@@ -22,68 +27,82 @@ function placesKey() {
   return key;
 }
 
-export async function autocompletePlaces(query: string): Promise<PlaceSuggestion[]> {
+type PlacesApiError = { error?: { message?: string; status?: string } };
+
+export async function autocompletePlaces(
+  query: string,
+  opts?: { forDestination?: boolean },
+): Promise<PlaceSuggestion[]> {
   const q = query.trim();
   if (q.length < 2) return [];
 
-  const url = new URL("https://maps.googleapis.com/maps/api/place/autocomplete/json");
-  url.searchParams.set("input", q);
-  url.searchParams.set("key", placesKey());
-  url.searchParams.set("components", "country:in");
-  url.searchParams.set("types", "geocode");
-  // Bias toward NCR
-  url.searchParams.set("location", "28.6139,77.2090");
-  url.searchParams.set("radius", "80000");
-
-  const res = await fetch(url.toString());
-  const data = (await res.json()) as {
-    status: string;
-    error_message?: string;
-    predictions?: { place_id: string; description: string }[];
+  const body: Record<string, unknown> = {
+    input: q,
+    includedRegionCodes: ["in"],
+    locationBias: {
+      circle: { center: NCR_CENTER, radius: NCR_BIAS_RADIUS_METERS },
+    },
   };
-
-  if (data.status === "ZERO_RESULTS") return [];
-  if (data.status !== "OK") {
-    throw new HttpError(502, data.error_message ?? "Could not fetch place suggestions");
+  // Destinations include establishments (colleges, offices, metros); owner addresses stay geocode-only.
+  if (!opts?.forDestination) {
+    body.includedPrimaryTypes = ["geocode"];
   }
 
-  return (data.predictions ?? []).map((p) => ({
-    placeId: p.place_id,
-    description: p.description,
-  }));
+  const res = await fetch(`${PLACES_API}/places:autocomplete`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "X-Goog-Api-Key": placesKey(),
+    },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json()) as PlacesApiError & {
+    suggestions?: { placePrediction?: { placeId: string; text?: { text: string } } }[];
+  };
+
+  if (!res.ok) {
+    throw new HttpError(502, data.error?.message ?? "Could not fetch place suggestions");
+  }
+
+  return (data.suggestions ?? []).flatMap((s) =>
+    s.placePrediction
+      ? [
+          {
+            placeId: s.placePrediction.placeId,
+            description: s.placePrediction.text?.text ?? "",
+          },
+        ]
+      : [],
+  );
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
-  const url = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-  url.searchParams.set("place_id", placeId);
-  url.searchParams.set("key", placesKey());
-  url.searchParams.set("fields", "formatted_address,geometry,address_component,place_id");
-
-  const res = await fetch(url.toString());
-  const data = (await res.json()) as {
-    status: string;
-    error_message?: string;
-    result?: {
-      place_id: string;
-      formatted_address?: string;
-      geometry?: { location?: { lat: number; lng: number } };
-      address_components?: { long_name: string; short_name: string; types: string[] }[];
-    };
+  const res = await fetch(`${PLACES_API}/places/${encodeURIComponent(placeId)}`, {
+    headers: {
+      "X-Goog-Api-Key": placesKey(),
+      "X-Goog-FieldMask": "id,formattedAddress,location,addressComponents",
+    },
+  });
+  const data = (await res.json()) as PlacesApiError & {
+    id?: string;
+    formattedAddress?: string;
+    location?: { latitude: number; longitude: number };
+    addressComponents?: { longText?: string; shortText?: string; types?: string[] }[];
   };
 
-  if (data.status !== "OK" || !data.result?.geometry?.location) {
-    throw new HttpError(502, data.error_message ?? "Could not load place details");
+  if (!res.ok || !data.location) {
+    throw new HttpError(502, data.error?.message ?? "Could not load place details");
   }
 
-  const components = data.result.address_components ?? [];
+  const components = data.addressComponents ?? [];
   const find = (...types: string[]) =>
-    components.find((c) => types.some((t) => c.types.includes(t)))?.long_name ?? null;
+    components.find((c) => types.some((t) => c.types?.includes(t)))?.longText ?? null;
 
   return {
-    placeId: data.result.place_id,
-    address: data.result.formatted_address ?? "",
-    latitude: data.result.geometry.location.lat,
-    longitude: data.result.geometry.location.lng,
+    placeId: data.id ?? placeId,
+    address: data.formattedAddress ?? "",
+    latitude: data.location.latitude,
+    longitude: data.location.longitude,
     cityName: find("locality", "administrative_area_level_2") ?? find("administrative_area_level_1"),
     areaName:
       find("sublocality_level_1", "sublocality", "neighborhood") ??
@@ -94,6 +113,9 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
 
 export type NearbyCategory = "cafes" | "restaurants" | "shopping" | "attractions" | "hangouts";
 
+/** Map-layer categories for explore UI. */
+export type MapPoiLayer = "transport" | "daily" | "lifestyle" | "essentials";
+
 export type NearbyPlace = {
   placeId: string;
   name: string;
@@ -102,6 +124,17 @@ export type NearbyPlace = {
   userRatingsTotal?: number;
   vicinity?: string;
   mapsUrl: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+export type MapPoi = {
+  placeId: string;
+  name: string;
+  layer: MapPoiLayer;
+  latitude: number;
+  longitude: number;
+  vicinity?: string;
 };
 
 const NEARBY_TYPE_GROUPS: { category: NearbyCategory; types: string[] }[] = [
@@ -112,38 +145,73 @@ const NEARBY_TYPE_GROUPS: { category: NearbyCategory; types: string[] }[] = [
   { category: "hangouts", types: ["park", "movie_theater"] },
 ];
 
-const PER_CATEGORY_LIMIT = 4;
-
-type NearbyApiResult = {
-  place_id: string;
-  name: string;
-  rating?: number;
-  user_ratings_total?: number;
-  vicinity?: string;
+export const MAP_LAYER_TYPES: Record<MapPoiLayer, string[]> = {
+  transport: ["subway_station", "bus_station", "train_station", "transit_station"],
+  daily: ["cafe", "grocery_store", "supermarket", "restaurant"],
+  lifestyle: ["shopping_mall", "gym", "park"],
+  essentials: ["hospital", "pharmacy", "doctor"],
 };
 
-async function nearbySearchByType(
+const PER_CATEGORY_LIMIT = 4;
+const PER_LAYER_LIMIT = 12;
+
+type NearbyApiResult = {
+  placeId: string;
+  name: string;
+  rating?: number;
+  userRatingsTotal?: number;
+  vicinity?: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+async function nearbySearch(
   lat: number,
   lng: number,
-  type: string,
+  types: string[],
   radiusMeters: number,
   key: string,
+  maxResultCount = 20,
 ): Promise<NearbyApiResult[]> {
-  const url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json");
-  url.searchParams.set("location", `${lat},${lng}`);
-  url.searchParams.set("radius", String(radiusMeters));
-  url.searchParams.set("type", type);
-  url.searchParams.set("key", key);
+  const res = await fetch(`${PLACES_API}/places:searchNearby`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.rating,places.userRatingCount,places.shortFormattedAddress,places.location",
+    },
+    body: JSON.stringify({
+      includedTypes: types,
+      maxResultCount,
+      locationRestriction: {
+        circle: { center: { latitude: lat, longitude: lng }, radius: radiusMeters },
+      },
+    }),
+    next: { revalidate: 21600 },
+  });
+  if (!res.ok) return [];
 
-  const res = await fetch(url.toString(), { next: { revalidate: 21600 } });
   const data = (await res.json()) as {
-    status: string;
-    results?: NearbyApiResult[];
+    places?: {
+      id: string;
+      displayName?: { text: string };
+      rating?: number;
+      userRatingCount?: number;
+      shortFormattedAddress?: string;
+      location?: { latitude: number; longitude: number };
+    }[];
   };
 
-  if (data.status === "ZERO_RESULTS") return [];
-  if (data.status !== "OK") return [];
-  return data.results ?? [];
+  return (data.places ?? []).map((p) => ({
+    placeId: p.id,
+    name: p.displayName?.text ?? "",
+    rating: p.rating,
+    userRatingsTotal: p.userRatingCount,
+    vicinity: p.shortFormattedAddress,
+    latitude: p.location?.latitude,
+    longitude: p.location?.longitude,
+  }));
 }
 
 function mapsPlaceUrl(placeId: string) {
@@ -164,23 +232,23 @@ export async function fetchNearbyPlaces({
 
   const categoryResults = await Promise.all(
     NEARBY_TYPE_GROUPS.map(async ({ category, types }) => {
-      const batches = await Promise.all(
-        types.map((type) => nearbySearchByType(lat, lng, type, radiusMeters, key)),
-      );
+      const rows = await nearbySearch(lat, lng, types, radiusMeters, key);
       const localSeen = new Set<string>();
       const places: NearbyPlace[] = [];
 
-      for (const row of batches.flat()) {
-        if (!row.place_id || localSeen.has(row.place_id)) continue;
-        localSeen.add(row.place_id);
+      for (const row of rows) {
+        if (!row.placeId || localSeen.has(row.placeId)) continue;
+        localSeen.add(row.placeId);
         places.push({
-          placeId: row.place_id,
+          placeId: row.placeId,
           name: row.name,
           category,
           rating: row.rating,
-          userRatingsTotal: row.user_ratings_total,
+          userRatingsTotal: row.userRatingsTotal,
           vicinity: row.vicinity,
-          mapsUrl: mapsPlaceUrl(row.place_id),
+          mapsUrl: mapsPlaceUrl(row.placeId),
+          latitude: row.latitude,
+          longitude: row.longitude,
         });
       }
 
@@ -205,5 +273,50 @@ export async function fetchNearbyPlaces({
       globalSeen.add(p.placeId);
       return true;
     });
+  });
+}
+
+/** Fetch POIs for explore map layer toggles. */
+export async function fetchMapLayerPois({
+  lat,
+  lng,
+  layers,
+  radiusMeters = 1500,
+}: {
+  lat: number;
+  lng: number;
+  layers: MapPoiLayer[];
+  radiusMeters?: number;
+}): Promise<MapPoi[]> {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key || layers.length === 0) return [];
+
+  const batches = await Promise.all(
+    layers.map(async (layer) => {
+      const rows = await nearbySearch(lat, lng, MAP_LAYER_TYPES[layer], radiusMeters, key);
+      const seen = new Set<string>();
+      const pois: MapPoi[] = [];
+      for (const row of rows) {
+        if (!row.placeId || seen.has(row.placeId)) continue;
+        if (row.latitude == null || row.longitude == null) continue;
+        seen.add(row.placeId);
+        pois.push({
+          placeId: row.placeId,
+          name: row.name,
+          layer,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          vicinity: row.vicinity,
+        });
+      }
+      return pois.slice(0, PER_LAYER_LIMIT);
+    }),
+  );
+
+  const globalSeen = new Set<string>();
+  return batches.flat().filter((p) => {
+    if (globalSeen.has(p.placeId)) return false;
+    globalSeen.add(p.placeId);
+    return true;
   });
 }

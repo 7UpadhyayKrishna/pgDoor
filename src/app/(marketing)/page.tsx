@@ -23,6 +23,12 @@ const locations = [
       "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?auto=format&fit=crop&w=800&q=80",
   },
   {
+    name: "Greater Noida",
+    href: "/pgs/greater-noida",
+    image:
+      "https://images.unsplash.com/photo-1486304873000-235643847519?auto=format&fit=crop&w=800&q=80",
+  },
+  {
     name: "Delhi",
     href: "/pgs/delhi",
     image:
@@ -40,10 +46,10 @@ export default async function HomePage() {
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div>
               <h1 className="text-4xl font-bold tracking-tight text-ink md:text-5xl">
-                Find your next PG.
+                Find the best PG for your daily life.
               </h1>
               <p className="mt-2 text-muted-foreground">
-                Verified PGs. Real photos. Real availability.
+                Search by office or college. Filter by commute and budget. Explore on the map.
               </p>
               <div className="mt-6">
                 <HeroSearch />
@@ -60,12 +66,12 @@ export default async function HomePage() {
                 ))}
               </div>
             </div>
-            <div className="hidden h-[420px] grid-cols-2 grid-rows-2 gap-3 lg:grid">
+            <div className="hidden h-[420px] grid-cols-2 grid-rows-3 gap-3 lg:grid">
               {locations.map((loc, i) => (
                 <Link
                   key={loc.href}
                   href={loc.href}
-                  className={`group relative overflow-hidden rounded-[24px] ${i === 0 ? "row-span-2" : ""}`}
+                  className={`group relative overflow-hidden rounded-[24px] ${i === 0 ? "row-span-3" : ""}`}
                 >
                   <Image
                     src={loc.image}
@@ -86,7 +92,7 @@ export default async function HomePage() {
 
       <section className="container-pg py-10 lg:hidden">
         <h2 className="text-xl font-semibold">Popular locations</h2>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {locations.map((loc) => (
             <Link key={loc.href} href={loc.href} className="group">
               <div className="relative aspect-[16/10] overflow-hidden rounded-[18px]">
@@ -95,7 +101,7 @@ export default async function HomePage() {
                   alt={loc.name}
                   fill
                   className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                  sizes="(max-width: 640px) 100vw, 33vw"
+                  sizes="(max-width: 640px) 100vw, 50vw"
                 />
               </div>
               <p className="mt-2 font-semibold">{loc.name}</p>

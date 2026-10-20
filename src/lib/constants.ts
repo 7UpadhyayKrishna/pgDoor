@@ -38,7 +38,14 @@ export const VERIFICATION_LABEL: Record<string, string> = {
 };
 
 export const QUICK_CHIPS = [
-  { label: "Near me", href: "/pgs/gurgaon" },
+  {
+    label: "Near Cyber City",
+    href: "/pgs?destLat=28.4940&destLng=77.0881&destLabel=Cyber%20City&commuteMax=20&mode=transit&budgetMax=15000&sort=commute",
+  },
+  {
+    label: "Near Noida Sec 62",
+    href: "/pgs?destLat=28.6270&destLng=77.3649&destLabel=Noida%20Sector%2062&commuteMax=20&mode=transit&budgetMax=12000&sort=commute",
+  },
   { label: "Under ₹10K", href: "/pgs?budgetMax=10000" },
   { label: "Single room", href: "/pgs?sharing=SINGLE" },
   { label: "Boys PG", href: "/pgs?pgType=BOYS" },

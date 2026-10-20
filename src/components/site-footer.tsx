@@ -18,6 +18,7 @@ const columns = [
     links: [
       { href: "/pgs/gurgaon", label: "Gurgaon" },
       { href: "/pgs/noida", label: "Noida" },
+      { href: "/pgs/greater-noida", label: "Greater Noida" },
       { href: "/pgs/delhi", label: "Delhi" },
     ],
   },

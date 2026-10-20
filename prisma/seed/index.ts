@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { AMENITIES } from "./amenities";
 import { NCR_CITIES } from "./cities-ncr";
 import { DEMO_PGS } from "./demo-pgs";
+import { seedTestPgs } from "./test-pgs";
 import { generateFromCounts } from "../../src/modules/inventory";
 
 const prisma = new PrismaClient();
@@ -219,6 +220,11 @@ async function main() {
       },
     });
   }
+
+  const testPgs = await seedTestPgs(prisma, amenityBySlug);
+  console.info(
+    `Test PGs (Noida + Greater Noida): inserted ${testPgs.inserted}, skipped ${testPgs.skipped} existing`,
+  );
 
   console.info("Seeded NCR cities, amenities, demo PGs, admin +919999999999, owner +919876543210");
   void admin;

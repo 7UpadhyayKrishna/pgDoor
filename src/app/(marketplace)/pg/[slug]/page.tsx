@@ -23,7 +23,8 @@ export default async function PgDetailPage({
   const { slug } = await params;
   const property = await getPublishedBySlug(slug);
   if (!property) notFound();
-  void incrementView(slug);
+  // View counts are best-effort; never let them surface as page errors.
+  void incrementView(slug).catch(() => undefined);
 
   const nearby = await getNearbyForArea(property.areaId);
 

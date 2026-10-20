@@ -18,10 +18,19 @@ const AMENITIES = [
 
 const SORTS = [
   { value: "relevance", label: "Recommended" },
+  { value: "commute", label: "Shortest commute" },
   { value: "rent", label: "Price: Low to High" },
   { value: "rent_desc", label: "Price: High to Low" },
   { value: "rating", label: "Rating" },
   { value: "freshness", label: "Recently Updated" },
+];
+
+const COMMUTE_OPTIONS = [15, 20, 30, 45];
+const MODE_OPTIONS = [
+  { value: "transit", label: "Transit" },
+  { value: "driving", label: "Car" },
+  { value: "bicycling", label: "Bike" },
+  { value: "walking", label: "Walk" },
 ];
 
 export function FilterControls() {
@@ -48,9 +57,17 @@ function useFilterNav() {
   return { params, apply, pathname, router };
 }
 
-export function FilterForm({ onDone }: { onDone?: () => void }) {
+export function FilterForm({
+  onDone,
+  showCommute = false,
+}: {
+  onDone?: () => void;
+  showCommute?: boolean;
+}) {
   const { params, apply, pathname, router } = useFilterNav();
   const [budget, setBudget] = useState(Number(params.get("budgetMax") ?? 25000));
+  const hasDestination = Boolean(params.get("destLat") && params.get("destLng"));
+  const commuteVisible = showCommute || hasDestination;
 
   return (
     <div className="space-y-6">
@@ -69,6 +86,60 @@ export function FilterForm({ onDone }: { onDone?: () => void }) {
         />
         <p className="mt-1 text-sm text-muted-foreground">Up to ₹{budget.toLocaleString("en-IN")}</p>
       </div>
+      {commuteVisible ? (
+        <>
+          <div>
+            <Label>Max commute</Label>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              {COMMUTE_OPTIONS.map((mins) => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() =>
+                    apply((n) => {
+                      if (n.get("commuteMax") === String(mins)) n.delete("commuteMax");
+                      else n.set("commuteMax", String(mins));
+                    })
+                  }
+                  className={`min-h-11 rounded-xl border px-2 ${
+                    params.get("commuteMax") === String(mins)
+                      ? "border-primary bg-primary-soft text-ink"
+                      : "border-input"
+                  }`}
+                >
+                  {mins} min
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label>Travel mode</Label>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              {MODE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() =>
+                    apply((n) => {
+                      n.set("mode", opt.value);
+                      if (!n.get("sort") || n.get("sort") === "relevance") {
+                        n.set("sort", "commute");
+                      }
+                    })
+                  }
+                  className={`min-h-11 rounded-xl border px-2 ${
+                    (params.get("mode") ?? "transit") === opt.value
+                      ? "border-primary bg-primary-soft text-ink"
+                      : "border-input"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : null}
       <div>
         <Label>Room type</Label>
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
@@ -180,6 +251,8 @@ export function FilterForm({ onDone }: { onDone?: () => void }) {
 
 function FilterSheet() {
   const [open, setOpen] = useState(false);
+  const params = useSearchParams();
+  const showCommute = Boolean(params.get("destLat") && params.get("destLng"));
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -190,7 +263,7 @@ function FilterSheet() {
       <SheetContent>
         <SheetTitle>Filters</SheetTitle>
         <div className="mt-4">
-          <FilterForm onDone={() => setOpen(false)} />
+          <FilterForm onDone={() => setOpen(false)} showCommute={showCommute} />
         </div>
       </SheetContent>
     </Sheet>

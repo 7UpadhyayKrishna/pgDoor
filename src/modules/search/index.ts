@@ -8,11 +8,17 @@ import {
   VerificationLevel,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { slugify } from "@/lib/utils";
+import { haversineKm, slugify } from "@/lib/utils";
 import { generateFromCounts, type RoomSpec } from "@/modules/inventory";
 import { HttpError } from "@/lib/rbac";
 import { SEARCH_PAGE_SIZE } from "@/lib/constants";
 import { matchAreasForQuery } from "@/modules/locations";
+import {
+  enrichCommutes,
+  estimateRadiusKm,
+  parseBounds,
+  type TravelMode,
+} from "@/lib/commute";
 
 export const searchFiltersSchema = z.object({
   city: z.string().optional(),
@@ -30,10 +36,28 @@ export const searchFiltersSchema = z.object({
   cookingAllowed: z.enum(["true", "false"]).optional(),
   availability: z.enum(["now", "week", "date"]).optional(),
   availableFrom: z.string().optional(),
-  sort: z.enum(["relevance", "rent", "rent_desc", "rating", "newest", "freshness"]).optional(),
+  sort: z
+    .enum([
+      "relevance",
+      "rent",
+      "rent_desc",
+      "rating",
+      "newest",
+      "freshness",
+      "commute",
+    ])
+    .optional(),
   page: z.coerce.number().int().min(1).optional(),
   featured: z.enum(["true", "false"]).optional(),
   near: z.string().optional(),
+  destLat: z.coerce.number().optional(),
+  destLng: z.coerce.number().optional(),
+  destLabel: z.string().optional(),
+  commuteMax: z.coerce.number().int().positive().optional(),
+  mode: z.enum(["driving", "transit", "walking", "bicycling"]).optional(),
+  radiusKm: z.coerce.number().positive().optional(),
+  /** south,west,north,east */
+  bounds: z.string().optional(),
 });
 
 const VERIFICATION_RANK: Record<VerificationLevel, number> = {
@@ -71,38 +95,49 @@ const cardInclude = {
   },
 } satisfies Prisma.PropertyInclude;
 
-export function toPublicCard(property: {
-  id: string;
-  slug: string;
-  name: string;
-  pgType: PgType;
-  address: string;
-  city: { name: string; slug: string };
-  area: { name: string; slug: string };
-  latitude: number;
-  longitude: number;
-  minRent: number;
-  minDeposit: number;
-  availableBeds: number;
-  totalBeds: number;
-  foodIncluded: boolean;
-  verificationLevel: VerificationLevel;
-  featured: boolean;
-  ratingAvg: number;
-  reviewCount: number;
-  availabilityUpdatedAt: Date;
-  availabilityConfirmedAt: Date;
-  moveInFrom: Date | null;
-  photos: { url: string; alt: string | null }[];
-  amenities?: { amenity: { name: string; slug: string; group: string } }[];
-  roomTypes: {
-    sharingType: RoomSharingType;
-    rent: number;
-    deposit: number;
+export type CardCommute = {
+  minutes: number | null;
+  distanceKm: number;
+  text: string;
+  mode: TravelMode;
+  fromRoute: boolean;
+};
+
+export function toPublicCard(
+  property: {
+    id: string;
+    slug: string;
+    name: string;
+    pgType: PgType;
+    address: string;
+    city: { name: string; slug: string };
+    area: { name: string; slug: string };
+    latitude: number;
+    longitude: number;
+    minRent: number;
+    minDeposit: number;
     availableBeds: number;
     totalBeds: number;
-  }[];
-}) {
+    foodIncluded: boolean;
+    verificationLevel: VerificationLevel;
+    featured: boolean;
+    ratingAvg: number;
+    reviewCount: number;
+    availabilityUpdatedAt: Date;
+    availabilityConfirmedAt: Date;
+    moveInFrom: Date | null;
+    photos: { url: string; alt: string | null }[];
+    amenities?: { amenity: { name: string; slug: string; group: string } }[];
+    roomTypes: {
+      sharingType: RoomSharingType;
+      rent: number;
+      deposit: number;
+      availableBeds: number;
+      totalBeds: number;
+    }[];
+  },
+  commute?: CardCommute | null,
+) {
   return {
     id: property.id,
     slug: property.slug,
@@ -141,39 +176,14 @@ export function toPublicCard(property: {
       availableBeds: rt.availableBeds,
       totalBeds: rt.totalBeds,
     })),
+    commute: commute ?? null,
   };
 }
 
-export async function searchProperties(filters: SearchFilters) {
-  const page = filters.page ?? 1;
-  const where: Prisma.PropertyWhereInput = {
-    status: PropertyStatus.PUBLISHED,
-  };
-
-  const q = filters.q?.trim();
-  let areaScores = new Map<string, number>();
-
-  if (q) {
-    const matched = await matchAreasForQuery(q);
-    if (matched.length === 0) {
-      return {
-        total: 0,
-        page,
-        pageSize: SEARCH_PAGE_SIZE,
-        results: [],
-      };
-    }
-    areaScores = new Map(matched.map((a) => [a.id, a.score]));
-    where.areaId = { in: matched.map((a) => a.id) };
-  } else {
-    if (filters.city) {
-      where.city = { slug: filters.city };
-    }
-    if (filters.area) {
-      where.area = { slug: filters.area };
-    }
-  }
-
+function applyNonGeoFilters(
+  where: Prisma.PropertyWhereInput,
+  filters: SearchFilters,
+) {
   if (filters.budgetMax) {
     where.minRent = { ...(where.minRent as object), lte: filters.budgetMax };
   }
@@ -222,9 +232,119 @@ export async function searchProperties(filters: SearchFilters) {
       where.OR = [{ moveInFrom: null }, { moveInFrom: { lte: date } }];
     }
   }
+}
+
+function sortByRelevance(
+  a: {
+    areaId: string;
+    featured: boolean;
+    verificationLevel: VerificationLevel;
+    availabilityConfirmedAt: Date;
+    ratingAvg: number;
+  },
+  b: typeof a,
+  areaScores: Map<string, number>,
+) {
+  const scoreA = areaScores.get(a.areaId) ?? 0;
+  const scoreB = areaScores.get(b.areaId) ?? 0;
+  if (scoreB !== scoreA) return scoreB - scoreA;
+  if (Number(b.featured) !== Number(a.featured)) {
+    return Number(b.featured) - Number(a.featured);
+  }
+  const verDiff =
+    VERIFICATION_RANK[b.verificationLevel] - VERIFICATION_RANK[a.verificationLevel];
+  if (verDiff !== 0) return verDiff;
+  const availDiff =
+    b.availabilityConfirmedAt.getTime() - a.availabilityConfirmedAt.getTime();
+  if (availDiff !== 0) return availDiff;
+  return b.ratingAvg - a.ratingAvg;
+}
+
+export async function searchProperties(filters: SearchFilters) {
+  const page = filters.page ?? 1;
+  const where: Prisma.PropertyWhereInput = {
+    status: PropertyStatus.PUBLISHED,
+  };
+
+  const q = filters.q?.trim();
+  let areaScores = new Map<string, number>();
+  const destLat = filters.destLat;
+  const destLng = filters.destLng;
+  const hasDestination =
+    typeof destLat === "number" &&
+    typeof destLng === "number" &&
+    !Number.isNaN(destLat) &&
+    !Number.isNaN(destLng);
+  const mode: TravelMode = filters.mode ?? "transit";
+  const bounds = parseBounds(filters.bounds);
+
+  // "near" alias: "lat,lng" string
+  let nearLat = destLat;
+  let nearLng = destLng;
+  if (!hasDestination && filters.near) {
+    const parts = filters.near.split(",").map(Number);
+    if (parts.length === 2 && parts.every((n) => !Number.isNaN(n))) {
+      nearLat = parts[0];
+      nearLng = parts[1];
+    }
+  }
+  const useGeo =
+    (typeof nearLat === "number" &&
+      typeof nearLng === "number" &&
+      !Number.isNaN(nearLat) &&
+      !Number.isNaN(nearLng)) ||
+    Boolean(bounds);
+
+  if (q && !useGeo) {
+    const matched = await matchAreasForQuery(q);
+    if (matched.length === 0) {
+      return {
+        total: 0,
+        page,
+        pageSize: SEARCH_PAGE_SIZE,
+        results: [],
+        destination: null as null | {
+          lat: number;
+          lng: number;
+          label?: string;
+          mode: TravelMode;
+        },
+      };
+    }
+    areaScores = new Map(matched.map((a) => [a.id, a.score]));
+    where.areaId = { in: matched.map((a) => a.id) };
+  } else if (!useGeo) {
+    if (filters.city) {
+      where.city = { slug: filters.city };
+    }
+    if (filters.area) {
+      where.area = { slug: filters.area };
+    }
+  } else {
+    // Still allow city narrowing when searching by destination
+    if (filters.city) {
+      where.city = { slug: filters.city };
+    }
+  }
+
+  applyNonGeoFilters(where, filters);
+
+  const destinationMeta =
+    typeof nearLat === "number" && typeof nearLng === "number"
+      ? {
+          lat: nearLat,
+          lng: nearLng,
+          label: filters.destLabel,
+          mode,
+        }
+      : null;
 
   const useAreaRelevance =
-    Boolean(q) && (!filters.sort || filters.sort === "relevance");
+    Boolean(q) && !useGeo && (!filters.sort || filters.sort === "relevance");
+  const useCommutePath =
+    useGeo ||
+    filters.sort === "commute" ||
+    Boolean(filters.commuteMax);
 
   let orderBy: Prisma.PropertyOrderByWithRelationInput[] = [
     { featured: "desc" },
@@ -244,21 +364,7 @@ export async function searchProperties(filters: SearchFilters) {
       include: cardInclude,
     });
 
-    rows.sort((a, b) => {
-      const scoreA = areaScores.get(a.areaId) ?? 0;
-      const scoreB = areaScores.get(b.areaId) ?? 0;
-      if (scoreB !== scoreA) return scoreB - scoreA;
-      if (Number(b.featured) !== Number(a.featured)) {
-        return Number(b.featured) - Number(a.featured);
-      }
-      const verDiff =
-        VERIFICATION_RANK[b.verificationLevel] - VERIFICATION_RANK[a.verificationLevel];
-      if (verDiff !== 0) return verDiff;
-      const availDiff =
-        b.availabilityConfirmedAt.getTime() - a.availabilityConfirmedAt.getTime();
-      if (availDiff !== 0) return availDiff;
-      return b.ratingAvg - a.ratingAvg;
-    });
+    rows.sort((a, b) => sortByRelevance(a, b, areaScores));
 
     const total = rows.length;
     const pageRows = rows.slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
@@ -267,7 +373,118 @@ export async function searchProperties(filters: SearchFilters) {
       total,
       page,
       pageSize: SEARCH_PAGE_SIZE,
-      results: pageRows.map(toPublicCard),
+      results: pageRows.map((row) => toPublicCard(row)),
+      destination: destinationMeta,
+    };
+  }
+
+  if (useCommutePath && typeof nearLat === "number" && typeof nearLng === "number") {
+    const radiusKm =
+      filters.radiusKm ?? estimateRadiusKm(filters.commuteMax, mode);
+
+    let rows = await prisma.property.findMany({
+      where,
+      include: cardInclude,
+    });
+
+    if (bounds) {
+      rows = rows.filter(
+        (p) =>
+          p.latitude >= bounds.south &&
+          p.latitude <= bounds.north &&
+          p.longitude >= bounds.west &&
+          p.longitude <= bounds.east,
+      );
+    } else {
+      rows = rows.filter(
+        (p) => haversineKm(p.latitude, p.longitude, nearLat, nearLng) <= radiusKm,
+      );
+    }
+
+    const commuteMap = await enrichCommutes(
+      rows.map((p) => ({ id: p.id, lat: p.latitude, lng: p.longitude })),
+      { lat: nearLat, lng: nearLng },
+      mode,
+    );
+
+    let enriched = rows.map((row) => ({
+      row,
+      commute: commuteMap.get(row.id) ?? null,
+    }));
+
+    if (filters.commuteMax) {
+      enriched = enriched.filter((item) => {
+        if (!item.commute) return false;
+        // When route time is available, use it; otherwise keep if within radius.
+        if (item.commute.fromRoute && item.commute.minutes != null) {
+          return item.commute.minutes <= filters.commuteMax!;
+        }
+        return true;
+      });
+    }
+
+    const sortMode = filters.sort ?? (useGeo ? "commute" : "relevance");
+    enriched.sort((a, b) => {
+      if (sortMode === "commute" || sortMode === "relevance") {
+        const minA = a.commute?.minutes ?? Number.POSITIVE_INFINITY;
+        const minB = b.commute?.minutes ?? Number.POSITIVE_INFINITY;
+        if (a.commute?.fromRoute && b.commute?.fromRoute && minA !== minB) {
+          return minA - minB;
+        }
+        const distA = a.commute?.distanceKm ?? Number.POSITIVE_INFINITY;
+        const distB = b.commute?.distanceKm ?? Number.POSITIVE_INFINITY;
+        if (distA !== distB) return distA - distB;
+        return sortByRelevance(a.row, b.row, areaScores);
+      }
+      if (sortMode === "rent") return a.row.minRent - b.row.minRent;
+      if (sortMode === "rent_desc") return b.row.minRent - a.row.minRent;
+      if (sortMode === "rating") return b.row.ratingAvg - a.row.ratingAvg;
+      if (sortMode === "freshness") {
+        return (
+          b.row.availabilityConfirmedAt.getTime() -
+          a.row.availabilityConfirmedAt.getTime()
+        );
+      }
+      return sortByRelevance(a.row, b.row, areaScores);
+    });
+
+    const total = enriched.length;
+    const pageRows = enriched.slice(
+      (page - 1) * SEARCH_PAGE_SIZE,
+      page * SEARCH_PAGE_SIZE,
+    );
+
+    return {
+      total,
+      page,
+      pageSize: SEARCH_PAGE_SIZE,
+      results: pageRows.map((item) => toPublicCard(item.row, item.commute)),
+      destination: destinationMeta,
+    };
+  }
+
+  // Bounds-only search (pan map without destination)
+  if (bounds) {
+    let rows = await prisma.property.findMany({
+      where,
+      include: cardInclude,
+      orderBy,
+    });
+    rows = rows.filter(
+      (p) =>
+        p.latitude >= bounds.south &&
+        p.latitude <= bounds.north &&
+        p.longitude >= bounds.west &&
+        p.longitude <= bounds.east,
+    );
+    const total = rows.length;
+    const pageRows = rows.slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
+    return {
+      total,
+      page,
+      pageSize: SEARCH_PAGE_SIZE,
+      results: pageRows.map((row) => toPublicCard(row)),
+      destination: destinationMeta,
     };
   }
 
@@ -286,7 +503,8 @@ export async function searchProperties(filters: SearchFilters) {
     total,
     page,
     pageSize: SEARCH_PAGE_SIZE,
-    results: rows.map(toPublicCard),
+    results: rows.map((row) => toPublicCard(row)),
+    destination: destinationMeta,
   };
 }
 
@@ -315,7 +533,7 @@ export async function getFeatured(limit = 8) {
     orderBy: [{ featured: "desc" }, { ratingAvg: "desc" }],
     take: limit,
   });
-  return rows.map(toPublicCard);
+  return rows.map((row) => toPublicCard(row));
 }
 
 export const getCachedFeatured = unstable_cache(

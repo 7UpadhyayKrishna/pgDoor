@@ -1,11 +1,13 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
 import { FilterControls, FilterForm } from "@/components/search/filters";
 import { NearbyPlaces } from "@/components/search/nearby-places";
-import { PgCard } from "@/components/search/pg-card";
+import { ExploreShell } from "@/components/search/explore-shell";
 import { searchFiltersSchema, searchProperties } from "@/modules/search";
 import { getAreaBySlugs, getNearbyForArea } from "@/modules/locations";
 import { Button } from "@/components/ui/button";
+import { PgCardSkeleton } from "@/components/search/pg-card-skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,9 @@ export async function SearchResults({
       : [];
   const blank = (value: string | string[] | undefined) =>
     !value || value === "" ? undefined : value;
-  const qParam = Array.isArray(raw.q) ? raw.q[0] : raw.q;
+  const single = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[0] : value;
+  const qParam = single(raw.q);
   const q = qParam && qParam !== "" ? qParam : undefined;
   const parsed = searchFiltersSchema.safeParse({
     city,
@@ -42,6 +46,14 @@ export async function SearchResults({
     sort: blank(raw.sort),
     page: blank(raw.page),
     food: blank(raw.food),
+    destLat: blank(raw.destLat),
+    destLng: blank(raw.destLng),
+    destLabel: blank(raw.destLabel),
+    commuteMax: blank(raw.commuteMax),
+    mode: blank(raw.mode),
+    radiusKm: blank(raw.radiusKm),
+    bounds: blank(raw.bounds),
+    near: blank(raw.near),
   });
   const filters = parsed.success ? parsed.data : { city, area, q };
 
@@ -55,10 +67,14 @@ export async function SearchResults({
       : Promise.resolve(null),
   ]);
 
-  const { results, total } = search;
-  const displayHeading = q
-    ? `PGs near “${q}”`
-    : heading.replace(/^PGs in /, "");
+  const { results, total, destination } = search;
+  const destLabel = single(raw.destLabel)?.trim();
+  const hasDestination = Boolean(destination?.lat && destination?.lng);
+  const displayHeading = destLabel
+    ? `PGs near ${destLabel}`
+    : q
+      ? `PGs near “${q}”`
+      : heading.replace(/^PGs in /, "");
 
   return (
     <div className="container-pg py-4 pb-24 md:py-8">
@@ -70,34 +86,55 @@ export async function SearchResults({
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-xl font-semibold">{displayHeading}</h1>
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-semibold">{displayHeading}</h1>
+          {hasDestination && filters.commuteMax ? (
+            <p className="text-sm text-muted-foreground">
+              Within {filters.commuteMax} min
+              {filters.mode ? ` by ${filters.mode}` : ""}
+              {filters.budgetMax
+                ? ` · under ₹${filters.budgetMax.toLocaleString("en-IN")}`
+                : ""}
+            </p>
+          ) : null}
+        </div>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{total} PGs found</p>
       <div className="mt-4">
-        <FilterControls />
+        <Suspense fallback={null}>
+          <FilterControls />
+        </Suspense>
       </div>
 
-      {nearby ? (
+      {nearby && !hasDestination ? (
         <div className="mt-6">
           <NearbyPlaces areaName={nearby.areaName} places={nearby.places} />
         </div>
       ) : null}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[280px_1fr]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[240px_1fr]">
         <aside className="hidden h-fit rounded-[18px] bg-white p-5 shadow-card lg:block">
-          <FilterForm />
+          <FilterForm showCommute={hasDestination || Boolean(filters.commuteMax)} />
         </aside>
-        <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-3">
-          {results.map((property) => (
-            <PgCard key={property.id} property={property} />
-          ))}
+        <div className="min-w-0">
+          <Suspense
+            fallback={
+              <div className="grid gap-4 sm:grid-cols-2">
+                <PgCardSkeleton />
+                <PgCardSkeleton />
+              </div>
+            }
+          >
+            <ExploreShell properties={results} destination={destination} />
+          </Suspense>
         </div>
       </div>
+
       {results.length === 0 ? (
-        <div className="mt-8 rounded-[24px] bg-primary-soft px-6 py-10 text-center">
+        <div className="mt-4 rounded-[24px] bg-primary-soft px-6 py-10 text-center lg:col-span-2">
           <h2 className="text-lg font-semibold">No PGs found</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            We couldn&apos;t find PGs matching all your filters.
+            Try a longer commute, higher budget, or search this area on the map.
           </p>
           <Button asChild className="mt-4">
             <Link href={city ? `/pgs/${city}` : "/pgs"}>Clear filters</Link>

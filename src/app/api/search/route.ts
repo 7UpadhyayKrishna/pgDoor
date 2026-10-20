@@ -21,6 +21,13 @@ export async function GET(request: Request) {
       sort: url.searchParams.get("sort") ?? undefined,
       page: url.searchParams.get("page") ?? undefined,
       near: url.searchParams.get("near") ?? undefined,
+      destLat: url.searchParams.get("destLat") ?? undefined,
+      destLng: url.searchParams.get("destLng") ?? undefined,
+      destLabel: url.searchParams.get("destLabel") ?? undefined,
+      commuteMax: url.searchParams.get("commuteMax") ?? undefined,
+      mode: url.searchParams.get("mode") ?? undefined,
+      radiusKm: url.searchParams.get("radiusKm") ?? undefined,
+      bounds: url.searchParams.get("bounds") ?? undefined,
     });
     const result = await searchProperties(parsed);
     await track(AnalyticsEvent.search, parsed);

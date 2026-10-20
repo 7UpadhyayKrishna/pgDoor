@@ -32,15 +32,30 @@ export function resolveCityAndArea(
     gurgaon: ["gurgaon", "gurugram"],
     delhi: ["delhi", "newdelhi", "nctofdelhi"],
     noida: ["noida"],
+    "greater-noida": ["greaternoida"],
   };
 
-  let city =
-    cities.find((c) => {
-      if (!place.cityName) return false;
-      const needle = normalize(place.cityName);
+  // "Greater Noida" contains "noida", so prefer exact, then the longest contained alias.
+  const aliasScore = (needle: string, alias: string) => {
+    if (needle === alias) return 1000;
+    if (needle.includes(alias)) return alias.length;
+    if (alias.includes(needle)) return needle.length / 2;
+    return 0;
+  };
+
+  let city: CityLike | null = null;
+  if (place.cityName) {
+    const needle = normalize(place.cityName);
+    let bestScore = 0;
+    for (const c of cities) {
       const aliases = cityAliases[c.slug] ?? [normalize(c.name)];
-      return aliases.some((a) => needle.includes(a) || a.includes(needle));
-    }) ?? null;
+      const score = Math.max(...aliases.map((a) => aliasScore(needle, a)));
+      if (score > bestScore) {
+        bestScore = score;
+        city = c;
+      }
+    }
+  }
 
   if (!city) {
     let best = Infinity;
