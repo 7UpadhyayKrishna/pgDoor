@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CalendarClock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireOwner } from "@/lib/session";
+import { requireOwnerPage } from "@/lib/session";
 import { leadCounts } from "@/modules/leads";
 import { confirmAvailability } from "@/modules/inventory";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { isPrelaunch, LAUNCH_DATE_LABEL } from "@/lib/launch";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerDashboardPage() {
-  const user = await requireOwner();
+  const user = await requireOwnerPage("/owners/dashboard");
   if (!user.ownerProfileId) {
     return <p>Create an owner profile first.</p>;
   }

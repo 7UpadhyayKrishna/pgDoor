@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/session";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHomePage() {
-  await requireAdmin();
+  await requireAdminPage("/admin");
   const [users, pgs, owners, leads] = await Promise.all([
     prisma.user.count(),
     prisma.property.count(),

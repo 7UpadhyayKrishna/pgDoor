@@ -1,11 +1,11 @@
-import { requireUser } from "@/lib/session";
+import { requireUserPage } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function VisitsPage() {
-  const user = await requireUser();
+  const user = await requireUserPage("/account/visits");
   const visits = await prisma.visit.findMany({
     where: { lead: { seekerId: user.id } },
     include: { lead: { include: { property: { select: { name: true, slug: true } } } } },

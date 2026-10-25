@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/session";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminLeadsPage() {
-  await requireAdmin();
+  await requireAdminPage("/admin/leads");
   const leads = await prisma.lead.findMany({
     include: {
       seeker: { select: { phone: true, name: true } },

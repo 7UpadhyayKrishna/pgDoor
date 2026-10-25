@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { requireUserPage } from "@/lib/session";
 import { toPublicCard } from "@/modules/search";
 import { PgCard } from "@/components/search/pg-card";
 
 export const dynamic = "force-dynamic";
 
 export default async function SavedPage() {
-  const user = await requireUser();
+  const user = await requireUserPage("/saved");
   const saved = await prisma.savedProperty.findMany({
     where: { userId: user.id },
     include: {

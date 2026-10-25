@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/session";
+import { requireUserPage } from "@/lib/session";
 import { listSeekerLeads } from "@/modules/leads";
 import { MOVE_IN_LABEL } from "@/lib/constants";
 import { ChatSheet } from "@/components/listing/chat-sheet";
@@ -7,7 +7,7 @@ import { ChatSheet } from "@/components/listing/chat-sheet";
 export const dynamic = "force-dynamic";
 
 export default async function EnquiriesPage() {
-  const user = await requireUser();
+  const user = await requireUserPage("/account/enquiries");
   const leads = await listSeekerLeads(user.id);
   return (
     <div>

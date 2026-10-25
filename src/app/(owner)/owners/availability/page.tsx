@@ -1,4 +1,4 @@
-import { requireOwner } from "@/lib/session";
+import { requireOwnerPage } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { confirmAvailability } from "@/modules/inventory";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { formatUpdatedAt } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerAvailabilityPage() {
-  const user = await requireOwner();
+  const user = await requireOwnerPage("/owners/availability");
   if (!user.ownerProfileId) {
     return <p>Complete owner registration first.</p>;
   }

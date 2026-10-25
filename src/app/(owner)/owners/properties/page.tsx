@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { CheckCircle2, ImageOff, MapPin, Pencil } from "lucide-react";
 import type { PropertyStatus } from "@prisma/client";
-import { requireOwner } from "@/lib/session";
+import { requireOwnerPage } from "@/lib/session";
 import { listOwnerProperties } from "@/modules/properties";
 import { Button } from "@/components/ui/button";
 import { formatInr } from "@/lib/format";
@@ -35,7 +35,7 @@ export default async function OwnerPropertiesPage({
 }: {
   searchParams: Promise<{ saved?: string }>;
 }) {
-  const user = await requireOwner();
+  const user = await requireOwnerPage("/owners/properties");
   if (!user.ownerProfileId) {
     return <p>Complete owner registration first.</p>;
   }

@@ -1,4 +1,4 @@
-import { requireOwner } from "@/lib/session";
+import { requireOwnerPage } from "@/lib/session";
 import { listOwnerLeads } from "@/modules/leads";
 import { MOVE_IN_LABEL } from "@/lib/constants";
 import { formatInr } from "@/lib/format";
@@ -8,7 +8,7 @@ import { ChatSheet } from "@/components/listing/chat-sheet";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerLeadsPage() {
-  const user = await requireOwner();
+  const user = await requireOwnerPage("/owners/leads");
   if (!user.ownerProfileId) {
     return <p>Complete owner registration first.</p>;
   }

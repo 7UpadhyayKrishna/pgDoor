@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { SESSION_COOKIE, SESSION_TTL_DAYS } from "@/lib/constants";
 import { hashSecret } from "@/lib/otp";
@@ -142,5 +143,33 @@ export async function requireAdmin() {
     const { HttpError } = await import("@/lib/rbac");
     throw new HttpError(403, "Admin access required");
   }
+  return user;
+}
+
+/*
+ * Page variants: server components must redirect, not throw. Middleware only
+ * checks the JWT, so a stale cookie whose DB session was deleted or expired
+ * still reaches the page.
+ */
+function loginPath(next: string) {
+  return `/login?next=${encodeURIComponent(next)}`;
+}
+
+export async function requireUserPage(next: string) {
+  const user = await getCurrentUser();
+  if (!user) redirect(loginPath(next));
+  return user;
+}
+
+export async function requireOwnerPage(next: string) {
+  const user = await requireUserPage(next);
+  if (user.role === "ADMIN") return user;
+  if (user.role !== "OWNER" || !user.ownerProfileId) redirect("/owners/register");
+  return user;
+}
+
+export async function requireAdminPage(next: string) {
+  const user = await requireUserPage(next);
+  if (user.role !== "ADMIN") redirect("/");
   return user;
 }

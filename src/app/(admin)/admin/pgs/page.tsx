@@ -1,11 +1,11 @@
-import { requireAdmin } from "@/lib/session";
+import { requireAdminPage } from "@/lib/session";
 import { listForAdmin, moderateProperty, setVerificationLevel } from "@/modules/verification";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPgsPage() {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPage("/admin/pgs");
   const pgs = await listForAdmin();
 
   return (

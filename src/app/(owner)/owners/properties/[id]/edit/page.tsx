@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireOwner } from "@/lib/session";
+import { requireOwnerPage } from "@/lib/session";
 import { HttpError } from "@/lib/rbac";
 import { LAUNCH_DATE_LABEL } from "@/lib/launch";
 import { listCities } from "@/modules/locations";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function EditPropertyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await requireOwner();
+  const user = await requireOwnerPage("/owners/properties");
   const property = await getOwnerProperty(user.ownerProfileId, id, user.role === "ADMIN").catch((error) => {
     if (error instanceof HttpError && error.status === 404) notFound();
     throw error;
