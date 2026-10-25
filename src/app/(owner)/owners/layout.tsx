@@ -3,6 +3,7 @@ import { Building2, CalendarCheck, LayoutDashboard, LogOut, MessageSquare } from
 import { getCurrentUser } from "@/lib/session";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
+import { isPrelaunch } from "@/lib/launch";
 
 const links = [
   { href: "/owners/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -46,7 +47,9 @@ export default async function OwnerLayout({
       <div className="container-pg flex flex-col gap-6 py-6 md:flex-row">
         <aside className="md:w-56 shrink-0">
           <nav className="flex gap-2 overflow-x-auto md:flex-col">
-            {links.map((link) => {
+            {links
+              .filter((link) => !(isPrelaunch() && link.href === "/owners/leads"))
+              .map((link) => {
               const Icon = link.icon;
               return (
                 <Link

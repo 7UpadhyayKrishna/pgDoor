@@ -78,11 +78,13 @@ export async function verifyOtpAndSession(input: z.infer<typeof verifyOtpSchema>
     include: { ownerProfile: true },
   });
 
-  if (input.purpose === "OWNER_REGISTER" && !user.ownerProfile) {
-    await prisma.ownerProfile.create({
-      data: { userId: user.id },
-    });
-    if (user.role !== "ADMIN") {
+  if (input.purpose === "OWNER_REGISTER") {
+    if (!user.ownerProfile) {
+      await prisma.ownerProfile.create({
+        data: { userId: user.id },
+      });
+    }
+    if (user.role === "SEEKER") {
       await prisma.user.update({ where: { id: user.id }, data: { role: "OWNER" } });
     }
   }
@@ -109,10 +111,13 @@ export async function ensureOwnerProfile(userId: string) {
     return existing;
   }
   const profile = await prisma.ownerProfile.create({ data: { userId } });
-  await prisma.user.update({
-    where: { id: userId },
-    data: { role: "OWNER" },
-  });
-  await createSession(userId);
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  if (user.role === "SEEKER") {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { role: "OWNER" },
+    });
+    await createSession(userId);
+  }
   return profile;
 }

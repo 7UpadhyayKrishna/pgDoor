@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { AMENITIES } from "./amenities";
-import { NCR_CITIES } from "./cities-ncr";
+import { seedReference } from "./reference";
 import { DEMO_PGS } from "./demo-pgs";
 import { seedTestPgs } from "./test-pgs";
 import { generateFromCounts } from "../../src/modules/inventory";
@@ -8,63 +7,7 @@ import { generateFromCounts } from "../../src/modules/inventory";
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.amenity.createMany({ data: AMENITIES, skipDuplicates: true });
-
-  for (const city of NCR_CITIES) {
-    const row = await prisma.city.upsert({
-      where: { slug: city.slug },
-      update: {
-        name: city.name,
-        state: city.state,
-        latitude: city.latitude,
-        longitude: city.longitude,
-      },
-      create: {
-        name: city.name,
-        slug: city.slug,
-        state: city.state,
-        latitude: city.latitude,
-        longitude: city.longitude,
-      },
-    });
-
-    for (const area of city.areas) {
-      await prisma.area.upsert({
-        where: { cityId_slug: { cityId: row.id, slug: area.slug } },
-        update: {
-          name: area.name,
-          latitude: area.latitude,
-          longitude: area.longitude,
-        },
-        create: {
-          cityId: row.id,
-          name: area.name,
-          slug: area.slug,
-          latitude: area.latitude,
-          longitude: area.longitude,
-        },
-      });
-    }
-
-    for (const landmark of city.landmarks) {
-      const area = await prisma.area.findUnique({
-        where: { cityId_slug: { cityId: row.id, slug: landmark.areaSlug } },
-      });
-      await prisma.landmark.upsert({
-        where: { cityId_slug: { cityId: row.id, slug: landmark.slug } },
-        update: { name: landmark.name, type: landmark.type },
-        create: {
-          cityId: row.id,
-          areaId: area?.id,
-          name: landmark.name,
-          slug: landmark.slug,
-          type: landmark.type,
-          latitude: landmark.latitude,
-          longitude: landmark.longitude,
-        },
-      });
-    }
-  }
+  await seedReference(prisma);
 
   const admin = await prisma.user.upsert({
     where: { phone: "+919999999999" },

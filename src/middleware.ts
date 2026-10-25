@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { SESSION_COOKIE } from "@/lib/constants";
+import { isPrelaunch, isPrelaunchBlockedApi, isPrelaunchBlockedPage } from "@/lib/launch";
 
 function secret() {
   return new TextEncoder().encode(
@@ -22,6 +23,19 @@ async function readRole(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const auth = await readRole(request);
+
+  if (isPrelaunch() && auth?.role !== "ADMIN") {
+    if (isPrelaunchBlockedApi(pathname)) {
+      return NextResponse.json({ error: "Not available until launch" }, { status: 404 });
+    }
+    if (isPrelaunchBlockedPage(pathname)) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+  }
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
 
   const ownerApp =
     pathname.startsWith("/owners/dashboard") ||
@@ -64,15 +78,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/owners/dashboard/:path*",
-    "/owners/properties/:path*",
-    "/owners/leads/:path*",
-    "/owners/availability/:path*",
-    "/admin",
-    "/admin/:path*",
-    "/account",
-    "/account/:path*",
-    "/saved",
-  ],
+  matcher: ["/((?!_next/static|_next/image|uploads/|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|json|txt)$).*)"],
 };

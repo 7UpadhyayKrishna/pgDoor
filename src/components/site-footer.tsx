@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import { isPrelaunch, LAUNCH_DATE_LABEL } from "@/lib/launch";
 
 const columns = [
   {
@@ -42,17 +43,40 @@ const columns = [
   },
 ];
 
+const prelaunchColumns = [
+  {
+    title: "For Owners",
+    links: [
+      { href: "/owners", label: "List your PG free" },
+      { href: "/login?next=/owners/dashboard", label: "Owner login" },
+      { href: "/owners/dashboard", label: "Owner dashboard" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { href: "/contact", label: "Contact" },
+      { href: "/privacy", label: "Privacy" },
+      { href: "/terms", label: "Terms" },
+    ],
+  },
+];
+
 export function SiteFooter() {
+  const prelaunch = isPrelaunch();
+  const visibleColumns = prelaunch ? prelaunchColumns : columns.slice(1);
   return (
     <footer className="mt-16 border-t border-border bg-white pb-24 md:pb-8">
       <div className="container-pg grid gap-8 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo />
           <p className="mt-3 text-sm text-muted-foreground">
-            Find your next PG. Verified listings, real photos, real availability.
+            {prelaunch
+              ? `Verified PGs across Delhi NCR. Opening to tenants on ${LAUNCH_DATE_LABEL}.`
+              : "Find your next PG. Verified listings, real photos, real availability."}
           </p>
         </div>
-        {columns.slice(1).map((col) => (
+        {visibleColumns.map((col) => (
           <div key={col.title}>
             <p className="text-sm font-semibold">{col.title}</p>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">

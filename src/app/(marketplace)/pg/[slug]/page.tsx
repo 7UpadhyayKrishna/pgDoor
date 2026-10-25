@@ -5,8 +5,8 @@ import { ShareListingButton } from "@/components/listing/share-listing-button";
 import { StickyCta } from "@/components/listing/sticky-cta";
 import { NearbyPlaces } from "@/components/search/nearby-places";
 import { Badge } from "@/components/ui/badge";
-import { SHARING_LABEL } from "@/lib/constants";
-import { formatInr, formatUpdatedAt } from "@/lib/format";
+import { MEAL_LABEL, PREFERRED_TENANTS_LABEL, SHARING_LABEL } from "@/lib/constants";
+import { formatGateTime, formatInr, formatUpdatedAt } from "@/lib/format";
 import { mapsEmbedUrl } from "@/lib/maps";
 import { getNearbyForArea } from "@/modules/locations";
 import { getPublishedBySlug, incrementView } from "@/modules/properties";
@@ -31,6 +31,20 @@ export default async function PgDetailPage({
   const primaryRoom = property.roomTypes[0];
   const scores = property.reviews[0]?.scores;
   const full = property.availableBeds <= 0;
+  const foodType = [property.vegetarianFood && "Veg", property.nonVegetarianFood && "Non-veg"]
+    .filter(Boolean)
+    .join(" & ");
+  const yesNo = (allowed: boolean) => (allowed ? "Allowed" : "Not allowed");
+  const rules: [string, string][] = [
+    ["Preferred tenants", PREFERRED_TENANTS_LABEL[property.preferredTenants]],
+    ["Gate closes", formatGateTime(property.gateClosingTime)],
+    ["Visitors", yesNo(property.visitorsAllowed)],
+    ["Cooking", yesNo(property.cookingAllowed)],
+    ["Smoking", yesNo(property.smokingAllowed)],
+    ["Alcohol", yesNo(property.alcoholAllowed)],
+    ["Notice period", property.noticePeriodDays ? `${property.noticePeriodDays} days` : "None"],
+    ["Lock-in", property.lockInMonths ? `${property.lockInMonths} months` : "None"],
+  ];
 
   return (
     <div className="pb-32 md:pb-28 lg:pb-8">
@@ -98,7 +112,16 @@ export default async function PgDetailPage({
             ) : null}
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Food</dt>
-              <dd className="shrink-0 font-medium">{property.foodIncluded ? "Included" : "Not included"}</dd>
+              <dd className="min-w-0 text-right font-medium">
+                {property.foodIncluded
+                  ? [
+                      property.mealsProvided.map((meal) => MEAL_LABEL[meal] ?? meal).join(", ") || "Included",
+                      foodType,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "Not included"}
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Electricity</dt>
@@ -131,6 +154,41 @@ export default async function PgDetailPage({
             ) : null}
           </div>
 
+          {property.description ? (
+            <section className="mt-8">
+              <h2 className="text-lg font-semibold">About this PG</h2>
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-ink/80 sm:text-base">
+                {property.description}
+              </p>
+            </section>
+          ) : null}
+
+          {property.roomTypes.length ? (
+            <section className="mt-8">
+              <h2 className="text-lg font-semibold">Rooms and rent</h2>
+              <ul className="mt-3 space-y-2">
+                {property.roomTypes.map((rt) => (
+                  <li
+                    key={rt.id}
+                    className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-sm shadow-card"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink">{SHARING_LABEL[rt.sharingType]}</p>
+                      <p className="text-muted-foreground">
+                        Deposit {formatInr(rt.deposit)} ·{" "}
+                        {rt.availableBeds > 0 ? `${rt.availableBeds} beds available` : "Full"}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-bold text-ink">
+                      {formatInr(rt.rent)}
+                      <span className="text-xs font-medium text-muted-foreground">/bed</span>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <section className="mt-8">
             <h2 className="text-lg font-semibold">Amenities</h2>
             <ul className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-4">
@@ -146,6 +204,18 @@ export default async function PgDetailPage({
                 {property.otherAmenities}
               </p>
             ) : null}
+          </section>
+
+          <section className="mt-8">
+            <h2 className="text-lg font-semibold">House rules and terms</h2>
+            <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+              {rules.map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-4 rounded-xl bg-white px-4 py-3 shadow-card">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 text-right font-medium text-ink">{value}</dd>
+                </div>
+              ))}
+            </dl>
           </section>
 
           {nearby ? (

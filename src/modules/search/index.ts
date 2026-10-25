@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { haversineKm, slugify } from "@/lib/utils";
 import { generateFromCounts, type RoomSpec } from "@/modules/inventory";
 import { HttpError } from "@/lib/rbac";
+import { isAllowedPhotoUrl } from "@/lib/storage";
 import { SEARCH_PAGE_SIZE } from "@/lib/constants";
 import { matchAreasForQuery } from "@/modules/locations";
 import {
@@ -622,43 +623,66 @@ export async function uniqueSlug(name: string, areaName: string, cityName: strin
   return slug;
 }
 
+const MEALS = ["BREAKFAST", "LUNCH", "DINNER"] as const;
+/** The database is far from the app server, so a listing save can take well over Prisma's 5s default. */
+const LISTING_TX_OPTIONS = { maxWait: 10_000, timeout: 30_000 };
+const MAX_PHOTOS = 20;
+
 export const createPropertySchema = z.object({
-  name: z.string().min(3),
-  description: z.string().optional(),
-  address: z.string().min(5),
+  name: z.string().trim().min(3, "PG name must be at least 3 characters").max(120),
+  description: z.string().trim().max(2000).optional(),
+  address: z.string().trim().min(5, "Add the full address").max(500),
   cityId: z.string(),
   areaId: z.string(),
   latitude: z.number(),
   longitude: z.number(),
   pgType: z.enum(["BOYS", "GIRLS", "CO_LIVING", "UNISEX"]),
+  preferredTenants: z.enum(["ANY", "STUDENTS", "PROFESSIONALS"]).default("ANY"),
   foodIncluded: z.boolean().optional(),
-  maintenanceCharge: z.number().optional(),
-  electricityNote: z.string().optional(),
+  mealsProvided: z.array(z.enum(MEALS)).default([]),
+  maintenanceCharge: z.number().int().nonnegative().optional(),
+  electricityNote: z.string().trim().max(120).optional(),
   vegetarianFood: z.boolean().optional(),
   nonVegetarianFood: z.boolean().optional(),
   smokingAllowed: z.boolean().optional(),
+  alcoholAllowed: z.boolean().optional(),
   visitorsAllowed: z.boolean().optional(),
   cookingAllowed: z.boolean().optional(),
+  gateClosingTime: z.string().trim().max(20).optional(),
+  noticePeriodDays: z.number().int().min(0).max(180).optional(),
+  lockInMonths: z.number().int().min(0).max(24).optional(),
+  moveInFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date")
+    .optional(),
+  contactName: z.string().trim().max(80).optional(),
+  contactPhone: z
+    .string()
+    .trim()
+    .regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number")
+    .optional(),
   amenitySlugs: z.array(z.string()).default([]),
-  otherAmenities: z.string().max(500).optional(),
+  otherAmenities: z.string().trim().max(500).optional(),
   rooms: z
     .array(
       z.object({
         sharingType: z.enum(["SINGLE", "DOUBLE", "TRIPLE", "FOUR"]),
-        rent: z.number().int().positive(),
+        rent: z.number().int().positive("Rent must be more than 0"),
         deposit: z.number().int().nonnegative(),
-        roomCount: z.number().int().positive(),
+        roomCount: z.number().int().positive("Add at least 1 room"),
         availableBeds: z.number().int().nonnegative(),
       }),
     )
-    .min(1),
-  photoUrls: z.array(z.string().url()).default([]),
+    .min(1, "Add at least one room type"),
+  photoUrls: z
+    .array(z.string().min(1))
+    .min(1, "Add at least one photo")
+    .max(MAX_PHOTOS, `You can add up to ${MAX_PHOTOS} photos`),
 });
 
-export async function createListing(
-  ownerProfileId: string,
-  input: z.infer<typeof createPropertySchema>,
-) {
+export type ListingInput = z.infer<typeof createPropertySchema>;
+
+async function resolveLocation(input: ListingInput) {
   const [city, area] = await Promise.all([
     prisma.city.findUnique({ where: { id: input.cityId } }),
     prisma.area.findUnique({ where: { id: input.areaId } }),
@@ -666,37 +690,68 @@ export async function createListing(
   if (!city || !area || area.cityId !== city.id) {
     throw new HttpError(400, "Pick a valid city and area");
   }
+  return { city, area };
+}
+
+function assertPhotoUrls(urls: string[], alreadyAttached: string[] = []) {
+  const bad = urls.find((url) => !alreadyAttached.includes(url) && !isAllowedPhotoUrl(url));
+  if (bad) throw new HttpError(400, "One of the photos was not uploaded correctly. Please re-upload it.");
+}
+
+function listingFields(input: ListingInput) {
+  const foodIncluded = input.foodIncluded ?? false;
+  return {
+    name: input.name,
+    description: input.description || null,
+    address: input.address,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    pgType: input.pgType,
+    preferredTenants: input.preferredTenants,
+    foodIncluded,
+    mealsProvided: foodIncluded ? input.mealsProvided : [],
+    vegetarianFood: foodIncluded && (input.vegetarianFood ?? false),
+    nonVegetarianFood: foodIncluded && (input.nonVegetarianFood ?? false),
+    maintenanceCharge: input.maintenanceCharge ?? null,
+    electricityNote: input.electricityNote || null,
+    smokingAllowed: input.smokingAllowed ?? false,
+    alcoholAllowed: input.alcoholAllowed ?? false,
+    visitorsAllowed: input.visitorsAllowed ?? false,
+    cookingAllowed: input.cookingAllowed ?? false,
+    gateClosingTime: input.gateClosingTime || null,
+    noticePeriodDays: input.noticePeriodDays ?? null,
+    lockInMonths: input.lockInMonths ?? null,
+    moveInFrom: input.moveInFrom ? new Date(`${input.moveInFrom}T00:00:00+05:30`) : null,
+    contactName: input.contactName || null,
+    contactPhone: input.contactPhone || null,
+    otherAmenities: input.otherAmenities || null,
+  };
+}
+
+async function amenityIds(slugs: string[]) {
+  if (!slugs.length) return [];
+  const rows = await prisma.amenity.findMany({ where: { slug: { in: slugs } } });
+  return rows.map((row) => row.id);
+}
+
+export async function createListing(ownerProfileId: string, input: ListingInput) {
+  const { city, area } = await resolveLocation(input);
+  assertPhotoUrls(input.photoUrls);
 
   const slug = await uniqueSlug(input.name, area.name, city.name);
-  const amenities = input.amenitySlugs.length
-    ? await prisma.amenity.findMany({ where: { slug: { in: input.amenitySlugs } } })
-    : [];
+  const amenities = await amenityIds(input.amenitySlugs);
 
   const property = await prisma.$transaction(async (tx) => {
     const created = await tx.property.create({
       data: {
+        ...listingFields(input),
         ownerId: ownerProfileId,
-        name: input.name,
         slug,
-        description: input.description,
-        address: input.address,
         cityId: city.id,
         areaId: area.id,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        pgType: input.pgType,
         status: "PENDING_REVIEW",
-        foodIncluded: input.foodIncluded ?? false,
-        maintenanceCharge: input.maintenanceCharge,
-        electricityNote: input.electricityNote,
-        vegetarianFood: input.vegetarianFood ?? false,
-        nonVegetarianFood: input.nonVegetarianFood ?? false,
-        smokingAllowed: input.smokingAllowed ?? false,
-        visitorsAllowed: input.visitorsAllowed ?? false,
-        cookingAllowed: input.cookingAllowed ?? false,
-        otherAmenities: input.otherAmenities?.trim() || null,
         amenities: {
-          create: amenities.map((amenity) => ({ amenityId: amenity.id })),
+          create: amenities.map((amenityId) => ({ amenityId })),
         },
         photos: {
           create: input.photoUrls.map((url, index) => ({
@@ -710,10 +765,79 @@ export async function createListing(
 
     await generateFromCounts(created.id, input.rooms as RoomSpec[], tx);
     return created;
-  });
+  }, LISTING_TX_OPTIONS);
 
   return prisma.property.findUniqueOrThrow({
     where: { id: property.id },
+    include: publicInclude,
+  });
+}
+
+export async function getOwnerProperty(ownerProfileId: string | null, propertyId: string, isAdmin = false) {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    include: {
+      city: true,
+      area: true,
+      photos: { orderBy: { sortOrder: "asc" } },
+      amenities: { include: { amenity: true } },
+      roomTypes: { include: { rooms: { select: { id: true } } } },
+    },
+  });
+  if (!property || (!isAdmin && property.ownerId !== ownerProfileId)) {
+    throw new HttpError(404, "Listing not found");
+  }
+  return property;
+}
+
+export async function updateListing(
+  ownerProfileId: string | null,
+  propertyId: string,
+  input: ListingInput,
+  isAdmin = false,
+) {
+  const existing = await getOwnerProperty(ownerProfileId, propertyId, isAdmin);
+  const { city, area } = await resolveLocation(input);
+  assertPhotoUrls(
+    input.photoUrls,
+    existing.photos.map((photo) => photo.url),
+  );
+  const amenities = await amenityIds(input.amenitySlugs);
+  const keptSharing = input.rooms.map((room) => room.sharingType);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.property.update({
+      where: { id: propertyId },
+      data: {
+        ...listingFields(input),
+        cityId: city.id,
+        areaId: area.id,
+        status: existing.status === "REJECTED" ? "PENDING_REVIEW" : existing.status,
+      },
+    });
+    await tx.propertyAmenity.deleteMany({ where: { propertyId } });
+    if (amenities.length) {
+      await tx.propertyAmenity.createMany({
+        data: amenities.map((amenityId) => ({ propertyId, amenityId })),
+      });
+    }
+    await tx.photo.deleteMany({ where: { propertyId } });
+    await tx.photo.createMany({
+      data: input.photoUrls.map((url, index) => ({
+        propertyId,
+        url,
+        sortOrder: index,
+        alt: input.name,
+      })),
+    });
+    await tx.roomType.deleteMany({
+      where: { propertyId, sharingType: { notIn: keptSharing } },
+    });
+    await generateFromCounts(propertyId, input.rooms as RoomSpec[], tx);
+  }, LISTING_TX_OPTIONS);
+
+  return prisma.property.findUniqueOrThrow({
+    where: { id: propertyId },
     include: publicInclude,
   });
 }

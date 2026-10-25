@@ -1,0 +1,16 @@
+-- CreateEnum
+DO $$ BEGIN
+ CREATE TYPE "PreferredTenants" AS ENUM ('ANY', 'STUDENTS', 'PROFESSIONALS');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+-- AlterTable
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "alcoholAllowed" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "mealsProvided" TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "gateClosingTime" TEXT;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "noticePeriodDays" INTEGER;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "lockInMonths" INTEGER;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "preferredTenants" "PreferredTenants" NOT NULL DEFAULT 'ANY';
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "contactName" TEXT;
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "contactPhone" TEXT;

@@ -1,18 +1,16 @@
 import { z } from "zod";
-import { createPresignedUpload, validateImageUpload } from "@/lib/s3";
+import { ALLOWED_IMAGE_MIME, createPhotoUpload, type UploadScope } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/rbac";
 
 export const presignSchema = z.object({
-  fileName: z.string().min(1),
-  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  fileName: z.string().min(1).max(200),
+  mimeType: z.enum(ALLOWED_IMAGE_MIME),
   size: z.number().int().positive(),
-  propertyId: z.string().optional(),
 });
 
-export async function presignPhoto(input: z.infer<typeof presignSchema>) {
-  validateImageUpload(input);
-  return createPresignedUpload(input);
+export async function presignPhoto(input: z.infer<typeof presignSchema>, scope: UploadScope) {
+  return createPhotoUpload({ ...input, scope });
 }
 
 export async function attachPhoto(input: {

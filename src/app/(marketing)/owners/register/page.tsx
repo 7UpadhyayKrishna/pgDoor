@@ -1,37 +1,41 @@
+import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/session";
-import { ensureOwnerProfile } from "@/modules/auth";
 import { prisma } from "@/lib/prisma";
 import { listCities } from "@/modules/locations";
-import { OwnerWizard } from "@/components/owner/owner-wizard";
-import { PhoneLogin } from "@/components/auth/phone-login";
-import { Suspense } from "react";
+import { ListingWizard } from "@/components/owner/wizard/listing-wizard";
+import { isPrelaunch, LAUNCH_DATE_LABEL } from "@/lib/launch";
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+  title: "List your PG for free",
+  description: "Add your PG on pgDoor in about 5 minutes. Free listing, no commission, direct tenant enquiries.",
+};
+
 export default async function OwnerRegisterPage() {
-  const user = await getCurrentUser();
-  if (user) {
-    await ensureOwnerProfile(user.id);
-  }
-  const [cities, amenities] = await Promise.all([
+  const [user, cities, amenities] = await Promise.all([
+    getCurrentUser(),
     listCities(),
-    prisma.amenity.findMany({ orderBy: { name: "asc" } }),
+    prisma.amenity.findMany({ orderBy: { name: "asc" }, select: { slug: true, name: true, group: true } }),
   ]);
 
   return (
-    <div className="container-pg py-12">
-      <h1 className="text-3xl font-bold">List your PG in under 5 minutes</h1>
-      <p className="mt-2 text-muted-foreground">OTP login, then rooms, pricing and photos.</p>
-      <div className="mt-8 max-w-2xl">
-        {!user ? (
-          <div className="rounded-2xl border bg-white p-6">
-            <Suspense>
-              <PhoneLogin purpose="OWNER_REGISTER" redirectTo="/owners/register" />
-            </Suspense>
-          </div>
-        ) : (
-          <OwnerWizard cities={cities} amenities={amenities} />
-        )}
+    <div className="container-pg py-6 md:py-10">
+      <div className="mx-auto max-w-2xl">
+        <h1 className="text-2xl font-bold text-ink md:text-3xl">List your PG for free</h1>
+        <p className="mt-1 text-sm text-muted-foreground md:text-base">
+          About 5 minutes. You&apos;ll verify your phone number at the end.
+          {isPrelaunch() ? ` Tenants can find your PG from ${LAUNCH_DATE_LABEL}.` : ""}
+        </p>
+        <div className="mt-6">
+          <ListingWizard
+            mode="create"
+            cities={cities}
+            amenities={amenities}
+            loggedIn={Boolean(user)}
+            launchLabel={LAUNCH_DATE_LABEL}
+          />
+        </div>
       </div>
     </div>
   );

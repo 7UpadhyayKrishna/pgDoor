@@ -30,6 +30,28 @@ Dev OTP is `123456`.
 | Owner | 9876543210 |
 | Seeker | 8888888888 |
 
+## Prelaunch mode (owner onboarding)
+
+`NEXT_PUBLIC_PRELAUNCH="true"` hides the seeker marketplace until launch (1 Jan 2027):
+
+- `/` is a "coming soon" page for tenants with all pgDoor features and a Free PG listing section.
+- `/owners` is the owner landing page ("List your PG for free").
+- Seeker pages (`/pgs`, `/pg/*`, `/compare`, `/saved`, `/account`, ...) redirect to `/`, and seeker APIs return 404.
+- Owners can list at `/owners/register` (OTP at the end) and manage listings under `/owners/*`.
+- Admins still see the whole site.
+
+On launch day set it to `"false"` and redeploy.
+
+The listing form needs cities, areas and amenities in the database. For a real (non-demo) database run
+`npm run db:seed:reference`, which loads only that reference data and no demo PGs or users.
+
+## Listing photos (Supabase Storage)
+
+1. In Supabase, create a **public** Storage bucket named `pg-photos`.
+2. Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (server only) and `SUPABASE_STORAGE_BUCKET`.
+
+Without these, local dev stores uploads under `public/uploads`; production uploads are disabled.
+
 ## Google Maps (location-first search)
 
 Enable in Google Cloud:

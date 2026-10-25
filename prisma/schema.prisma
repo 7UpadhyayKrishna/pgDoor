@@ -43,6 +43,12 @@ enum PgType {
   UNISEX
 }
 
+enum PreferredTenants {
+  ANY
+  STUDENTS
+  PROFESSIONALS
+}
+
 enum RoomSharingType {
   SINGLE
   DOUBLE
@@ -267,6 +273,14 @@ model Property {
   smokingAllowed          Boolean           @default(false)
   visitorsAllowed         Boolean           @default(false)
   cookingAllowed          Boolean           @default(false)
+  alcoholAllowed          Boolean           @default(false)
+  mealsProvided           String[]          @default([])
+  gateClosingTime         String?
+  noticePeriodDays        Int?
+  lockInMonths            Int?
+  preferredTenants        PreferredTenants  @default(ANY)
+  contactName             String?
+  contactPhone            String?
   otherAmenities          String?           @db.Text
   ratingAvg               Float             @default(0)
   reviewCount             Int               @default(0)

@@ -51,31 +51,33 @@ export async function generateFromCounts(
       },
     });
 
-    await client.bed.deleteMany({
-      where: { room: { roomTypeId: roomType.id } },
-    });
+    // Beds cascade-delete with their room.
     await client.room.deleteMany({ where: { roomTypeId: roomType.id } });
+    if (spec.roomCount <= 0) continue;
+
+    const rooms = await client.room.createManyAndReturn({
+      data: Array.from({ length: spec.roomCount }, (_, i) => ({
+        propertyId,
+        roomTypeId: roomType.id,
+        name: `Room ${i + 1}`,
+        totalBeds: perRoom,
+      })),
+      select: { id: true, name: true },
+    });
+    const roomIdByName = new Map(rooms.map((room) => [room.name, room.id]));
 
     let remainingAvailable = available;
+    const beds: Prisma.BedCreateManyInput[] = [];
     for (let i = 0; i < spec.roomCount; i += 1) {
-      const room = await client.room.create({
-        data: {
-          propertyId,
-          roomTypeId: roomType.id,
-          name: `Room ${i + 1}`,
-          totalBeds: perRoom,
-        },
-      });
-      const labels = bedLabels(perRoom);
-      for (const label of labels) {
+      const roomId = roomIdByName.get(`Room ${i + 1}`)!;
+      for (const label of bedLabels(perRoom)) {
         const status: BedStatus =
           remainingAvailable > 0 ? BedStatus.AVAILABLE : BedStatus.OCCUPIED;
         if (status === BedStatus.AVAILABLE) remainingAvailable -= 1;
-        await client.bed.create({
-          data: { roomId: room.id, label, status },
-        });
+        beds.push({ roomId, label, status });
       }
     }
+    await client.bed.createMany({ data: beds });
   }
 
   return syncDenormalized(propertyId, client);
@@ -104,10 +106,12 @@ export async function syncDenormalized(
     availableBeds += available;
     if (rt.rent < minRent) minRent = rt.rent;
     if (rt.deposit < minDeposit) minDeposit = rt.deposit;
-    await client.roomType.update({
-      where: { id: rt.id },
-      data: { totalBeds: beds.length, availableBeds: available },
-    });
+    if (rt.totalBeds !== beds.length || rt.availableBeds !== available) {
+      await client.roomType.update({
+        where: { id: rt.id },
+        data: { totalBeds: beds.length, availableBeds: available },
+      });
+    }
   }
 
   return client.property.update({

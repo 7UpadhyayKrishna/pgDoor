@@ -23,6 +23,18 @@ export const PG_TYPE_LABEL: Record<string, string> = {
   UNISEX: "Unisex",
 };
 
+export const PREFERRED_TENANTS_LABEL: Record<string, string> = {
+  ANY: "Anyone",
+  STUDENTS: "Students",
+  PROFESSIONALS: "Working professionals",
+};
+
+export const MEAL_LABEL: Record<string, string> = {
+  BREAKFAST: "Breakfast",
+  LUNCH: "Lunch",
+  DINNER: "Dinner",
+};
+
 export const MOVE_IN_LABEL: Record<string, string> = {
   IMMEDIATE: "Immediately",
   WITHIN_7_DAYS: "Within 7 days",
