@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Heart, MapPin, Star } from "lucide-react";
+import { ArrowLeft, Heart, MapPin, Navigation, Star } from "lucide-react";
 import { Gallery } from "@/components/listing/gallery";
 import { ShareListingButton } from "@/components/listing/share-listing-button";
 import { StickyCta } from "@/components/listing/sticky-cta";
@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { MEAL_LABEL, PREFERRED_TENANTS_LABEL, SHARING_LABEL } from "@/lib/constants";
 import { formatGateTime, formatInr, formatUpdatedAt } from "@/lib/format";
 import { mapsEmbedUrl } from "@/lib/maps";
+import { enrichCommutes, type TravelMode } from "@/lib/commute";
+import { distanceLine, googleDirectionsUrl, type Origin } from "@/lib/directions";
+import { PgTypeBadge } from "@/components/search/pg-card";
 import { getNearbyForArea } from "@/modules/locations";
 import { getPublishedBySlug, incrementView } from "@/modules/properties";
 import { ReportListing } from "@/components/listing/report-listing";
@@ -15,18 +18,44 @@ import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
+function parseOrigin(query: Record<string, string | string[] | undefined>): Origin | null {
+  const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+  const lat = Number(first(query.destLat));
+  const lng = Number(first(query.destLng));
+  if (!first(query.destLat) || !first(query.destLng) || Number.isNaN(lat) || Number.isNaN(lng)) {
+    return null;
+  }
+  return { lat, lng, label: first(query.destLabel), mode: first(query.mode) };
+}
+
+const TRAVEL_MODES: TravelMode[] = ["driving", "transit", "walking", "bicycling"];
+
 export default async function PgDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { slug } = await params;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   const property = await getPublishedBySlug(slug);
   if (!property) notFound();
   // View counts are best-effort; never let them surface as page errors.
   void incrementView(slug).catch(() => undefined);
 
-  const nearby = await getNearbyForArea(property.areaId);
+  const origin = parseOrigin(query);
+  const mode = TRAVEL_MODES.find((m) => m === origin?.mode) ?? "transit";
+  const [nearby, commutes] = await Promise.all([
+    getNearbyForArea(property.areaId),
+    origin
+      ? enrichCommutes(
+          [{ id: property.id, lat: property.latitude, lng: property.longitude }],
+          { lat: origin.lat, lng: origin.lng },
+          mode,
+        )
+      : Promise.resolve(null),
+  ]);
+  const commute = commutes?.get(property.id) ?? null;
 
   const primaryRoom = property.roomTypes[0];
   const scores = property.reviews[0]?.scores;
@@ -79,6 +108,27 @@ export default async function PgDetailPage({
               ) : null}
             </span>
           </p>
+          <div className="mt-2">
+            <PgTypeBadge pgType={property.pgType} />
+          </div>
+          {origin && commute ? (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] bg-primary-soft px-4 py-3 text-sm">
+              <p className="font-medium text-ink">
+                {distanceLine({ distanceKm: commute.distanceKm, minutes: commute.minutes, mode })}
+                {origin.label ? (
+                  <span className="font-normal text-muted-foreground"> from {origin.label}</span>
+                ) : null}
+              </p>
+              <a
+                href={googleDirectionsUrl({ ...origin, mode }, property)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
+              >
+                <Navigation className="h-4 w-4" /> Directions
+              </a>
+            </div>
+          ) : null}
           {property.ratingAvg > 0 ? (
             <p className="mt-2 flex items-center gap-1 font-medium">
               <Star className="h-4 w-4 fill-ink" />

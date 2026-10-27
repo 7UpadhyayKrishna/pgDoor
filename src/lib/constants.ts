@@ -5,7 +5,7 @@ export const OTP_TTL_MINUTES = 5;
 export const OTP_MAX_PER_WINDOW = 3;
 export const OTP_WINDOW_MINUTES = 10;
 
-export const COMPARE_LIMIT = 3;
+export const COMPARE_LIMIT = 2;
 export const SEARCH_PAGE_SIZE = 12;
 export const STALE_AVAILABILITY_DAYS = 3;
 
@@ -68,7 +68,7 @@ export const QUICK_CHIPS = [
 export const NAV = {
   desktop: [
     { label: "Find PGs", href: "/pgs" },
-    { label: "Explore", href: "/pgs/gurgaon" },
+    { label: "Explore", href: "/pgs?view=map" },
     { label: "For Owners", href: "/owners" },
   ],
   mobile: [

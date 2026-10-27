@@ -20,6 +20,7 @@ const PRELAUNCH_BLOCKED_PAGES = [
 const PRELAUNCH_BLOCKED_APIS = [
   "/api/search",
   "/api/pgs",
+  "/api/compare",
   "/api/leads",
   "/api/saved",
   "/api/visits",

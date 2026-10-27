@@ -3,10 +3,13 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Heart, Star } from "lucide-react";
+import { Heart, Navigation, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { SHARING_LABEL, STALE_AVAILABILITY_DAYS } from "@/lib/constants";
+import { PG_TYPE_LABEL, SHARING_LABEL, STALE_AVAILABILITY_DAYS } from "@/lib/constants";
+import { toggleCompare, useCompareItems } from "@/lib/compare-store";
+import { distanceLine, googleDirectionsUrl, listingHref, type Origin } from "@/lib/directions";
 import { formatInr, formatUpdatedAt } from "@/lib/format";
+import { PG_TYPE_COLOR } from "@/lib/pg-type-colors";
 import { cn } from "@/lib/utils";
 import type { toPublicCard } from "@/modules/search";
 
@@ -18,18 +21,45 @@ function isAvailabilityFresh(date: Date | string) {
   return confirmed >= cutoff;
 }
 
+export function PgTypeBadge({ pgType }: { pgType: Card["pgType"] }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink/80">
+      <span
+        aria-hidden
+        className="h-2.5 w-2.5 rounded-full"
+        style={{ background: PG_TYPE_COLOR[pgType] }}
+      />
+      {PG_TYPE_LABEL[pgType]}
+    </span>
+  );
+}
+
 export function PgCard({
   property,
   variant = "stack",
+  origin,
+  compare = false,
 }: {
   property: Card;
   variant?: "stack" | "rail";
+  /** Preferred location; enables the distance line and Directions link. */
+  origin?: Origin | null;
+  compare?: boolean;
 }) {
   const photo = property.photos[0]?.url;
   const sharing = property.roomTypes[0]?.sharingType;
   const [saved, setSaved] = useState(false);
   const full = property.availableBeds <= 0;
   const availabilityFresh = isAvailabilityFresh(property.availabilityConfirmedAt);
+  const compareItems = useCompareItems();
+  const inCompare = compareItems.some((item) => item.slug === property.slug);
+  const distance = property.commute
+    ? distanceLine({
+        distanceKm: property.commute.distanceKm,
+        minutes: property.commute.minutes,
+        mode: property.commute.mode,
+      })
+    : null;
 
   return (
     <article
@@ -38,7 +68,11 @@ export function PgCard({
         variant === "rail" && "w-[260px] shrink-0",
       )}
     >
-      <Link href={`/pg/${property.slug}`} className="block" onClick={(e) => e.stopPropagation()}>
+      <Link
+        href={listingHref(property.slug, origin)}
+        className="block"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="relative aspect-[4/3] overflow-hidden rounded-[14px] bg-canvas">
           {photo ? (
             <Image
@@ -84,13 +118,19 @@ export function PgCard({
           <p className="text-sm text-muted-foreground">
             {property.area.name}, {property.city.name}
           </p>
+          <PgTypeBadge pgType={property.pgType} />
           <p className="text-sm font-semibold text-ink">
             {formatInr(property.minRent)}/month
             {sharing ? ` · ${SHARING_LABEL[sharing].replace(" Sharing", "")}` : ""}
             {property.foodIncluded ? " · Food included" : ""}
           </p>
-          {property.commute ? (
-            <p className="text-sm font-medium text-primary">{property.commute.text}</p>
+          {distance ? (
+            <p className="text-sm font-medium text-primary">
+              {distance}
+              {origin?.label ? (
+                <span className="font-normal text-muted-foreground"> from {origin.label}</span>
+              ) : null}
+            </p>
           ) : null}
           {property.ratingAvg > 0 ? (
             <p className="flex items-center gap-1 text-sm text-ink">
@@ -110,6 +150,39 @@ export function PgCard({
           </p>
         </div>
       </Link>
+
+      {origin || compare ? (
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+          {origin ? (
+            <a
+              href={googleDirectionsUrl(origin, property)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              <Navigation className="h-4 w-4" />
+              Directions
+            </a>
+          ) : (
+            <span />
+          )}
+          {compare ? (
+            <label
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-ink"
+            >
+              <input
+                type="checkbox"
+                checked={inCompare}
+                onChange={() => toggleCompare({ slug: property.slug, name: property.name })}
+                className="h-4 w-4 accent-primary"
+              />
+              Compare
+            </label>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }

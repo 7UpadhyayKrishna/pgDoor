@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
 import { FilterControls, FilterForm } from "@/components/search/filters";
 import { NearbyPlaces } from "@/components/search/nearby-places";
+import { PreferredLocation } from "@/components/search/preferred-location";
 import { ExploreShell } from "@/components/search/explore-shell";
 import { searchFiltersSchema, searchProperties } from "@/modules/search";
 import { getAreaBySlugs, getNearbyForArea } from "@/modules/locations";
@@ -77,7 +78,7 @@ export async function SearchResults({
       : heading.replace(/^PGs in /, "");
 
   return (
-    <div className="container-pg py-4 pb-24 md:py-8">
+    <div className="container-pg py-4 pb-48 md:py-8 md:pb-40">
       <div className="flex items-center gap-3">
         <Link
           href="/"
@@ -100,6 +101,11 @@ export async function SearchResults({
         </div>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{total} PGs found</p>
+      <div className="mt-3">
+        <Suspense fallback={null}>
+          <PreferredLocation />
+        </Suspense>
+      </div>
       <div className="mt-4">
         <Suspense fallback={null}>
           <FilterControls />

@@ -106,6 +106,7 @@ const pinSelect = {
   latitude: true,
   longitude: true,
   minRent: true,
+  pgType: true,
   city: { select: { name: true } },
   area: { select: { name: true } },
   photos: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { url: true } },
@@ -118,10 +119,13 @@ export type MapPin = {
   latitude: number;
   longitude: number;
   minRent: number;
+  pgType: PgType;
   areaName: string;
   cityName: string;
   photo: string | null;
   commuteText: string | null;
+  commuteMinutes: number | null;
+  distanceKm: number | null;
 };
 
 function toMapPin(
@@ -132,11 +136,12 @@ function toMapPin(
     latitude: number;
     longitude: number;
     minRent: number;
+    pgType: PgType;
     city: { name: string };
     area: { name: string };
     photos: { url: string }[];
   },
-  commute?: { text: string } | null,
+  commute?: { text: string; minutes: number | null; distanceKm: number } | null,
 ): MapPin {
   return {
     id: row.id,
@@ -145,10 +150,13 @@ function toMapPin(
     latitude: row.latitude,
     longitude: row.longitude,
     minRent: row.minRent,
+    pgType: row.pgType,
     areaName: row.area.name,
     cityName: row.city.name,
     photo: row.photos[0]?.url ?? null,
     commuteText: commute?.text ?? null,
+    commuteMinutes: commute?.minutes ?? null,
+    distanceKm: commute?.distanceKm ?? null,
   };
 }
 

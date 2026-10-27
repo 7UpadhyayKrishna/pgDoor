@@ -5,6 +5,7 @@ import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { loadGoogleMaps, formatRentPin, getMapsBrowserKey } from "@/lib/google-maps";
 import type { MapPin } from "@/modules/search";
 import type { MapPoiLayer } from "@/lib/places";
+import { PG_TYPE_COLOR, PG_TYPE_LEGEND } from "@/lib/pg-type-colors";
 import { cn } from "@/lib/utils";
 
 type LandmarkPin = {
@@ -37,21 +38,22 @@ const LAYER_COLORS: Record<MapPoiLayer, string> = {
   essentials: "#dc2626",
 };
 
-function createPricePinElement(rent: number, selected: boolean) {
+function createPricePinElement(pin: MapPin, highlighted: boolean) {
   const el = document.createElement("button");
   el.type = "button";
-  el.textContent = formatRentPin(rent);
+  el.textContent = formatRentPin(pin.minRent);
   el.style.cssText = [
-    "border:none",
+    "border:2px solid #fff",
     "cursor:pointer",
     "font:600 12px/1 system-ui,sans-serif",
-    "padding:6px 10px",
+    "padding:5px 9px",
     "border-radius:999px",
     "white-space:nowrap",
-    "box-shadow:0 2px 8px rgba(0,0,0,.18)",
-    selected
-      ? "background:#7a9b80;color:#fff;transform:scale(1.15);z-index:2"
-      : "background:#fff;color:#1a1a1a",
+    "color:#fff",
+    `background:${PG_TYPE_COLOR[pin.pgType]}`,
+    highlighted
+      ? "transform:scale(1.2);box-shadow:0 0 0 3px #1a1a1a,0 4px 12px rgba(0,0,0,.3)"
+      : "box-shadow:0 2px 8px rgba(0,0,0,.18)",
   ].join(";");
   return el;
 }
@@ -73,6 +75,7 @@ function createDotElement(color: string, title: string) {
 export function ExploreMap({
   pins,
   selectedId,
+  hoveredId = null,
   onSelect,
   destination,
   onSearchArea,
@@ -80,6 +83,7 @@ export function ExploreMap({
 }: {
   pins: MapPin[];
   selectedId: string | null;
+  hoveredId?: string | null;
   onSelect: (id: string) => void;
   destination?: { lat: number; lng: number; label?: string } | null;
   onSearchArea?: (bounds: { south: number; west: number; north: number; east: number }) => void;
@@ -88,7 +92,7 @@ export function ExploreMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
-  const styledSelectedId = useRef<string | null>(null);
+  const styledIds = useRef<Set<string>>(new Set());
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const clustererRef = useRef<MarkerClusterer | null>(null);
@@ -166,13 +170,13 @@ export function ExploreMap({
     });
     markersRef.current = new Map();
     clustererRef.current?.clearMarkers();
-    styledSelectedId.current = null;
+    styledIds.current = new Set();
 
     const markers = pins.map((p) => {
       const marker = new AdvancedMarkerElement({
         map: null,
         position: { lat: p.latitude, lng: p.longitude },
-        content: createPricePinElement(p.minRent, false),
+        content: createPricePinElement(p, false),
         title: p.name,
         zIndex: 1,
       });
@@ -191,28 +195,35 @@ export function ExploreMap({
     }
   }, [ready, pins, destination]);
 
-  // Restyle only the previously and newly selected pins, then pan
+  // Restyle only pins whose highlight changed (selected or hovered in the list)
   useEffect(() => {
-    if (!ready || !mapInstance.current) return;
-    const restyle = (id: string | null, isSelected: boolean) => {
-      if (!id) return;
+    if (!ready) return;
+    const next = new Set([selectedId, hoveredId].filter((id): id is string => Boolean(id)));
+    const restyle = (id: string, highlighted: boolean) => {
       const marker = markersRef.current.get(id);
       const pin = pins.find((p) => p.id === id);
       if (!marker || !pin) return;
-      marker.content = createPricePinElement(pin.minRent, isSelected);
-      marker.zIndex = isSelected ? 10 : 1;
+      marker.content = createPricePinElement(pin, highlighted);
+      marker.zIndex = highlighted ? 10 : 1;
     };
-    if (styledSelectedId.current !== selectedId) {
-      restyle(styledSelectedId.current, false);
-      restyle(selectedId, true);
-      styledSelectedId.current = selectedId;
-    }
+    styledIds.current.forEach((id) => {
+      if (!next.has(id)) restyle(id, false);
+    });
+    next.forEach((id) => {
+      if (!styledIds.current.has(id)) restyle(id, true);
+    });
+    styledIds.current = next;
+  }, [selectedId, hoveredId, ready, pins]);
+
+  // Pan to the selected pin
+  useEffect(() => {
+    if (!ready || !mapInstance.current) return;
     if (!selected) return;
     mapInstance.current.panTo({ lat: selected.latitude, lng: selected.longitude });
     if ((mapInstance.current.getZoom() ?? 12) < 14) {
       mapInstance.current.setZoom(14);
     }
-  }, [selectedId, selected, ready, pins]);
+  }, [selected, ready]);
 
   // Destination marker
   useEffect(() => {
@@ -380,6 +391,18 @@ export function ExploreMap({
           </button>
         ))}
       </div>
+
+      <ul
+        aria-label="Map legend"
+        className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 rounded-xl bg-white/95 px-2.5 py-2 text-xs font-medium text-ink shadow-card"
+      >
+        {PG_TYPE_LEGEND.map((item) => (
+          <li key={item.label} className="flex items-center gap-1.5">
+            <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} />
+            {item.label}
+          </li>
+        ))}
+      </ul>
 
       {showSearchArea && onSearchArea ? (
         <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
