@@ -15,6 +15,11 @@ const NOIDA_COUNT = 550;
 const BATCH_SIZE = 100;
 const OWNER_COUNT = 20;
 
+export const TEST_OWNER_PHONES = Array.from(
+  { length: OWNER_COUNT },
+  (_, i) => `+91700000${String(i + 1).padStart(4, "0")}`,
+);
+
 const PHOTO_POOL = [...new Set(DEMO_PGS.flatMap((pg) => pg.photos))];
 
 const NAME_PREFIXES = [
@@ -262,7 +267,7 @@ async function upsertTestOwners(prisma: PrismaClient) {
   const ownerIds: string[] = [];
   for (let n = 1; n <= OWNER_COUNT; n += 1) {
     const label = String(n).padStart(2, "0");
-    const phone = `+91700000${String(n).padStart(4, "0")}`;
+    const phone = TEST_OWNER_PHONES[n - 1];
     const user = await prisma.user.upsert({
       where: { phone },
       update: { role: "OWNER", phoneVerified: true },

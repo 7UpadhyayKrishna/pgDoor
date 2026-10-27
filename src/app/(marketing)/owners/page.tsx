@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { OwnerLaunchLanding } from "@/components/home/owner-launch-landing";
-import { isPrelaunch, LAUNCH_DATE_LABEL } from "@/lib/launch";
+import { LAUNCH_DATE_LABEL } from "@/lib/launch";
+import { isPrelaunchForViewer } from "@/lib/launch-server";
 
 const sections = [
   {
@@ -37,16 +38,16 @@ const sections = [
   },
 ];
 
-export function generateMetadata(): Metadata {
-  if (!isPrelaunch()) return {};
+export async function generateMetadata(): Promise<Metadata> {
+  if (!(await isPrelaunchForViewer())) return {};
   return {
     title: { absolute: "List your PG for free · pgDoor" },
     description: `List your PG on pgDoor for free. No commission, no brokerage. Tenants start searching on ${LAUNCH_DATE_LABEL}.`,
   };
 }
 
-export default function OwnersLandingPage() {
-  if (isPrelaunch()) return <OwnerLaunchLanding />;
+export default async function OwnersLandingPage() {
+  if (await isPrelaunchForViewer()) return <OwnerLaunchLanding />;
   return (
     <div className="container-pg py-12">
       <div className="rounded-[24px] bg-primary-soft px-6 py-12 md:px-12">

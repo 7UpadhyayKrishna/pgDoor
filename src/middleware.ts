@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { SESSION_COOKIE } from "@/lib/constants";
 import { isPrelaunch, isPrelaunchBlockedApi, isPrelaunchBlockedPage } from "@/lib/launch";
+import { TESTER_COOKIE, verifyTesterToken } from "@/lib/tester";
 
 function secret() {
   return new TextEncoder().encode(
@@ -24,7 +25,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const auth = await readRole(request);
 
-  if (isPrelaunch() && auth?.role !== "ADMIN") {
+  if (
+    isPrelaunch() &&
+    auth?.role !== "ADMIN" &&
+    !(await verifyTesterToken(request.cookies.get(TESTER_COOKIE)?.value))
+  ) {
     if (isPrelaunchBlockedApi(pathname)) {
       return NextResponse.json({ error: "Not available until launch" }, { status: 404 });
     }

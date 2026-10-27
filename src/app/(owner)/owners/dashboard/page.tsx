@@ -5,7 +5,8 @@ import { requireOwnerPage } from "@/lib/session";
 import { leadCounts } from "@/modules/leads";
 import { confirmAvailability } from "@/modules/inventory";
 import { Button } from "@/components/ui/button";
-import { isPrelaunch, LAUNCH_DATE_LABEL } from "@/lib/launch";
+import { LAUNCH_DATE_LABEL } from "@/lib/launch";
+import { isPrelaunchForViewer } from "@/lib/launch-server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function OwnerDashboardPage() {
     return <p>Create an owner profile first.</p>;
   }
   const ownerId = user.ownerProfileId;
-  const prelaunch = isPrelaunch();
+  const prelaunch = await isPrelaunchForViewer();
   const [properties, leads, counts] = await Promise.all([
     prisma.property.findMany({ where: { ownerId } }),
     prelaunch

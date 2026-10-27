@@ -3,7 +3,8 @@ import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { listCities } from "@/modules/locations";
 import { ListingWizard } from "@/components/owner/wizard/listing-wizard";
-import { isPrelaunch, LAUNCH_DATE_LABEL } from "@/lib/launch";
+import { LAUNCH_DATE_LABEL } from "@/lib/launch";
+import { isPrelaunchForViewer } from "@/lib/launch-server";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,11 @@ export const metadata: Metadata = {
 };
 
 export default async function OwnerRegisterPage() {
-  const [user, cities, amenities] = await Promise.all([
+  const [user, cities, amenities, prelaunch] = await Promise.all([
     getCurrentUser(),
     listCities(),
     prisma.amenity.findMany({ orderBy: { name: "asc" }, select: { slug: true, name: true, group: true } }),
+    isPrelaunchForViewer(),
   ]);
 
   return (
@@ -25,7 +27,7 @@ export default async function OwnerRegisterPage() {
         <h1 className="text-2xl font-bold text-ink md:text-3xl">List your PG for free</h1>
         <p className="mt-1 text-sm text-muted-foreground md:text-base">
           About 5 minutes. You&apos;ll verify your phone number at the end.
-          {isPrelaunch() ? ` Tenants can find your PG from ${LAUNCH_DATE_LABEL}.` : ""}
+          {prelaunch ? ` Tenants can find your PG from ${LAUNCH_DATE_LABEL}.` : ""}
         </p>
         <div className="mt-6">
           <ListingWizard

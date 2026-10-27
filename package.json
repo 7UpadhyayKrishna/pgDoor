@@ -12,6 +12,8 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed/index.ts",
     "db:seed:reference": "tsx prisma/seed/reference-only.ts",
+    "db:seed:samples": "tsx prisma/seed/samples-only.ts",
+    "db:samples:remove": "tsx prisma/seed/remove-samples.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },

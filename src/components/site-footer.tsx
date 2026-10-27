@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
-import { isPrelaunch, LAUNCH_DATE_LABEL } from "@/lib/launch";
+import { LAUNCH_DATE_LABEL } from "@/lib/launch";
 
 const columns = [
   {
@@ -62,8 +62,7 @@ const prelaunchColumns = [
   },
 ];
 
-export function SiteFooter() {
-  const prelaunch = isPrelaunch();
+export function SiteFooter({ prelaunch }: { prelaunch: boolean }) {
   const visibleColumns = prelaunch ? prelaunchColumns : columns.slice(1);
   return (
     <footer className="mt-16 border-t border-border bg-white pb-24 md:pb-8">

@@ -6,7 +6,6 @@ import { AreaSearch } from "@/components/search/area-search";
 import { NAV } from "@/lib/constants";
 import type { AuthUser } from "@/lib/rbac";
 import { canAccessAdmin, canAccessOwner } from "@/lib/rbac";
-import { isPrelaunch } from "@/lib/launch";
 
 export { Logo };
 
@@ -42,8 +41,8 @@ function PrelaunchHeader({ user }: { user: AuthUser | null }) {
   );
 }
 
-export function SiteHeader({ user }: { user: AuthUser | null }) {
-  if (isPrelaunch()) {
+export function SiteHeader({ user, prelaunch }: { user: AuthUser | null; prelaunch: boolean }) {
+  if (prelaunch) {
     return <PrelaunchHeader user={user} />;
   }
   return (

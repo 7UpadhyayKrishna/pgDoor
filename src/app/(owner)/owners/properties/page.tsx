@@ -7,7 +7,8 @@ import { listOwnerProperties } from "@/modules/properties";
 import { Button } from "@/components/ui/button";
 import { formatInr } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { isPrelaunch, LAUNCH_DATE_SHORT } from "@/lib/launch";
+import { LAUNCH_DATE_SHORT } from "@/lib/launch";
+import { isPrelaunchForViewer } from "@/lib/launch-server";
 import { completeness, propertyToDraft } from "@/components/owner/wizard/draft";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function OwnerPropertiesPage({
     return <p>Complete owner registration first.</p>;
   }
   const [{ saved }, properties] = await Promise.all([searchParams, listOwnerProperties(user.ownerProfileId)]);
-  const prelaunch = isPrelaunch();
+  const prelaunch = await isPrelaunchForViewer();
 
   return (
     <div>

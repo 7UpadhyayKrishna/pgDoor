@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Heart, Home, Inbox, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isPrelaunch } from "@/lib/launch";
 
 const items = [
   { href: "/", label: "Home", icon: Home },
@@ -14,9 +13,9 @@ const items = [
   { href: "/account", label: "Profile", icon: User },
 ];
 
-export function MobileNav() {
+export function MobileNav({ prelaunch }: { prelaunch: boolean }) {
   const pathname = usePathname();
-  if (isPrelaunch()) return null;
+  if (prelaunch) return null;
   if (pathname.startsWith("/owners/")) {
     return null;
   }

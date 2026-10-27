@@ -3,7 +3,7 @@ import { Building2, CalendarCheck, LayoutDashboard, LogOut, MessageSquare } from
 import { getCurrentUser } from "@/lib/session";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { isPrelaunch } from "@/lib/launch";
+import { isPrelaunchForViewer } from "@/lib/launch-server";
 
 const links = [
   { href: "/owners/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -17,7 +17,7 @@ export default async function OwnerLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  const [user, prelaunch] = await Promise.all([getCurrentUser(), isPrelaunchForViewer()]);
   return (
     <div className="min-h-screen bg-canvas">
       <header className="border-b border-border bg-white">
@@ -48,7 +48,7 @@ export default async function OwnerLayout({
         <aside className="md:w-56 shrink-0">
           <nav className="flex gap-2 overflow-x-auto md:flex-col">
             {links
-              .filter((link) => !(isPrelaunch() && link.href === "/owners/leads"))
+              .filter((link) => !(prelaunch && link.href === "/owners/leads"))
               .map((link) => {
               const Icon = link.icon;
               return (
