@@ -1,15 +1,22 @@
 import Link from "next/link";
-import { ArrowLeft, Heart, MapPin, Navigation, Star } from "lucide-react";
+import { ArrowLeft, MapPin, Star } from "lucide-react";
 import { Gallery } from "@/components/listing/gallery";
 import { ShareListingButton } from "@/components/listing/share-listing-button";
 import { StickyCta } from "@/components/listing/sticky-cta";
 import { NearbyPlaces } from "@/components/search/nearby-places";
+import { NearbyEssentials } from "@/components/listing/nearby-essentials";
+import { CommuteCard } from "@/components/listing/commute-card";
+import { SaveButton } from "@/components/listing/save-button";
+import { CommuteTrial } from "@/components/listing/commute-trial";
+import { ScoreBreakdown } from "@/components/listing/score-breakdown";
 import { Badge } from "@/components/ui/badge";
 import { MEAL_LABEL, PREFERRED_TENANTS_LABEL, SHARING_LABEL } from "@/lib/constants";
 import { formatGateTime, formatInr, formatUpdatedAt } from "@/lib/format";
 import { mapsEmbedUrl } from "@/lib/maps";
-import { enrichCommutes, type TravelMode } from "@/lib/commute";
-import { distanceLine, googleDirectionsUrl, type Origin } from "@/lib/directions";
+import { parseCommuteMode, ALL_DETAIL_MODES } from "@/lib/commute/modes";
+import { fillCommuteQuotes } from "@/modules/commute";
+import { nearbyForProperty } from "@/modules/pois";
+import { type Origin } from "@/lib/directions";
 import { PgTypeBadge } from "@/components/search/pg-card";
 import { getNearbyForArea } from "@/modules/locations";
 import { getPublishedBySlug, incrementView } from "@/modules/properties";
@@ -28,7 +35,6 @@ function parseOrigin(query: Record<string, string | string[] | undefined>): Orig
   return { lat, lng, label: first(query.destLabel), mode: first(query.mode) };
 }
 
-const TRAVEL_MODES: TravelMode[] = ["driving", "transit", "walking", "bicycling"];
 
 export default async function PgDetailPage({
   params,
@@ -44,18 +50,23 @@ export default async function PgDetailPage({
   void incrementView(slug).catch(() => undefined);
 
   const origin = parseOrigin(query);
-  const mode = TRAVEL_MODES.find((m) => m === origin?.mode) ?? "transit";
-  const [nearby, commutes] = await Promise.all([
+  const productMode = parseCommuteMode(origin?.mode);
+  const [nearby, essentials, commuteProfile] = await Promise.all([
     getNearbyForArea(property.areaId),
+    nearbyForProperty(property.id, property.latitude, property.longitude),
     origin
-      ? enrichCommutes(
-          [{ id: property.id, lat: property.latitude, lng: property.longitude }],
-          { lat: origin.lat, lng: origin.lng },
-          mode,
-        )
+      ? fillCommuteQuotes(
+          [{ id: property.id, lat: property.latitude, lng: property.longitude, rent: property.minRent }],
+          {
+            destLat: origin.lat,
+            destLng: origin.lng,
+            destLabel: origin.label,
+            mode: productMode,
+          },
+          ALL_DETAIL_MODES,
+        ).then((map) => map.get(property.id) ?? null)
       : Promise.resolve(null),
   ]);
-  const commute = commutes?.get(property.id) ?? null;
 
   const primaryRoom = property.roomTypes[0];
   const scores = property.reviews[0]?.scores;
@@ -83,14 +94,17 @@ export default async function PgDetailPage({
         </Link>
         <div className="flex gap-1">
           <ShareListingButton slug={property.slug} name={property.name} />
-          <Link href="/saved" className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" aria-label="Save">
-            <Heart className="h-5 w-5" />
-          </Link>
+          <SaveButton propertyId={property.id} className="hover:bg-white" />
         </div>
       </div>
 
       <div className="container-pg">
-        <Gallery photos={property.photos} name={property.name} />
+        <Gallery
+          photos={property.photos}
+          name={property.name}
+          tourVideoUrl={property.tourVideoUrl}
+          tourThumbnailUrl={property.tourThumbnailUrl}
+        />
       </div>
 
       <div className="container-pg mt-5 grid gap-8 sm:mt-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -111,24 +125,34 @@ export default async function PgDetailPage({
           <div className="mt-2">
             <PgTypeBadge pgType={property.pgType} />
           </div>
-          {origin && commute ? (
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] bg-primary-soft px-4 py-3 text-sm">
-              <p className="font-medium text-ink">
-                {distanceLine({ distanceKm: commute.distanceKm, minutes: commute.minutes, mode })}
-                {origin.label ? (
-                  <span className="font-normal text-muted-foreground"> from {origin.label}</span>
-                ) : null}
-              </p>
-              <a
-                href={googleDirectionsUrl({ ...origin, mode }, property)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
-              >
-                <Navigation className="h-4 w-4" /> Directions
-              </a>
+          {origin && commuteProfile ? (
+            <>
+              <CommuteCard
+                profile={commuteProfile}
+                destLabel={origin.label}
+                destLat={origin.lat}
+                destLng={origin.lng}
+                rent={property.minRent}
+                property={property}
+              />
+              <CommuteTrial quote={commuteProfile.recommended} destLabel={origin.label} />
+            </>
+          ) : null}
+          {property.commuteBadges.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {property.commuteBadges.map((badge) => (
+                <Badge key={badge} variant="verified">
+                  {badge}
+                </Badge>
+              ))}
             </div>
           ) : null}
+          <ScoreBreakdown
+            livability={property.livabilityScore}
+            livabilityBreakdown={property.livabilityBreakdown}
+            safety={property.safetyScore}
+            safetyBreakdown={property.safetyBreakdown}
+          />
           {property.ratingAvg > 0 ? (
             <p className="mt-2 flex items-center gap-1 font-medium">
               <Star className="h-4 w-4 fill-ink" />
@@ -268,6 +292,7 @@ export default async function PgDetailPage({
             </dl>
           </section>
 
+          <NearbyEssentials places={essentials} />
           {nearby ? (
             <div className="mt-8">
               <NearbyPlaces areaName={nearby.areaName} places={nearby.places} />
@@ -298,6 +323,9 @@ export default async function PgDetailPage({
                       ["Location", scores.location],
                       ["Management", scores.management],
                       ["Value", scores.value],
+                      ["Commute", scores.commute],
+                      ["Safety", scores.safety],
+                      ["Owner", scores.owner],
                     ] as const
                   ).map(([label, value]) => (
                     <li key={label} className="flex items-center gap-3">

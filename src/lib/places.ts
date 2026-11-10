@@ -16,6 +16,7 @@ export type PlaceDetails = {
 
 const PLACES_API = "https://places.googleapis.com/v1";
 const NCR_CENTER = { latitude: 28.6139, longitude: 77.209 };
+const GURUGRAM_CENTER = { latitude: 28.4595, longitude: 77.0266 };
 /** Places API (New) caps locationBias circles at 50 km. */
 const NCR_BIAS_RADIUS_METERS = 50000;
 
@@ -40,7 +41,10 @@ export async function autocompletePlaces(
     input: q,
     includedRegionCodes: ["in"],
     locationBias: {
-      circle: { center: NCR_CENTER, radius: NCR_BIAS_RADIUS_METERS },
+      circle: {
+        center: opts?.forDestination ? GURUGRAM_CENTER : NCR_CENTER,
+        radius: NCR_BIAS_RADIUS_METERS,
+      },
     },
   };
   // Destinations include establishments (colleges, offices, metros); owner addresses stay geocode-only.

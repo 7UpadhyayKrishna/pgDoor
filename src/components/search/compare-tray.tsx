@@ -36,7 +36,7 @@ export function CompareTray() {
   const params = useSearchParams();
   if (items.length === 0) return null;
 
-  const ready = items.length >= COMPARE_LIMIT;
+  const ready = items.length >= 2;
 
   return (
     <div className="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-[18px] bg-white p-3 shadow-card ring-1 ring-border">
@@ -69,7 +69,7 @@ export function CompareTray() {
             <Link href={compareHref(params)}>Compare now</Link>
           </Button>
         ) : (
-          <span className="text-xs text-muted-foreground">Pick one more</span>
+          <span className="text-xs text-muted-foreground">Pick at least two</span>
         )}
         <button
           type="button"

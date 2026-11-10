@@ -17,7 +17,10 @@ const MODE_TEXT: Record<TravelModeName, string> = {
 };
 
 function asMode(mode?: string): TravelModeName {
-  return mode === "driving" || mode === "walking" || mode === "bicycling" ? mode : "transit";
+  if (mode === "walk") return "walking";
+  if (mode === "cycle" || mode === "rapido" || mode === "bicycling") return "bicycling";
+  if (mode === "auto" || mode === "cab" || mode === "own_vehicle" || mode === "driving") return "driving";
+  return "transit";
 }
 
 export function formatDistanceKm(km: number) {

@@ -29,7 +29,7 @@ export function HeroSearch() {
   const [destLabel, setDestLabel] = useState("");
   const [commuteMax, setCommuteMax] = useState(20);
   const [budgetMax, setBudgetMax] = useState(10000);
-  const [mode, setMode] = useState("transit");
+  const [mode, setMode] = useState("metro");
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -116,10 +116,11 @@ export function HeroSearch() {
             onChange={(e) => setMode(e.target.value)}
             className="mt-1 h-12 w-full rounded-[20px] border-0 bg-canvas px-4 text-sm font-medium text-ink"
           >
-            <option value="transit">Metro / transit</option>
-            <option value="driving">Car</option>
-            <option value="bicycling">Bike</option>
-            <option value="walking">Walking</option>
+            <option value="metro">Metro</option>
+            <option value="bus">Bus</option>
+            <option value="auto">Auto</option>
+            <option value="walk">Walk</option>
+            <option value="rapido">Rapido</option>
           </select>
         </label>
       </div>

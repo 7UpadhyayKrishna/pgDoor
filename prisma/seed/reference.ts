@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { AMENITIES } from "./amenities";
 import { NCR_CITIES } from "./cities-ncr";
+import { seedDestinations } from "./destinations";
 
 /** Cities, areas, landmarks and amenities: the data the listing form needs. No demo PGs or users. */
 export async function seedReference(prisma: PrismaClient) {
@@ -61,4 +62,6 @@ export async function seedReference(prisma: PrismaClient) {
       });
     }
   }
+
+  await seedDestinations(prisma);
 }

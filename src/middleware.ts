@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if ((pathname.startsWith("/account") || pathname === "/saved") && !auth) {
+  if ((pathname.startsWith("/account") || pathname === "/saved" || pathname === "/alerts") && !auth) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

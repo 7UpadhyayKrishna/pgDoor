@@ -45,7 +45,16 @@ export type ComparePg = {
   verificationLevel: string;
   moveInFrom: string | null;
   availabilityConfirmedAt: string;
-  commute: { distanceKm: number; minutes: number | null; mode: string; fromRoute: boolean } | null;
+  commute: {
+    distanceKm: number;
+    minutes: number | null;
+    mode: string;
+    fromRoute: boolean;
+    trueMonthlyCost?: number;
+    quotes?: { mode: string; minutes: number; monthlyCost: number }[];
+  } | null;
+  livabilityScore?: number | null;
+  safetyScore?: number | null;
 };
 
 export type HouseRuleNeed = "visitors" | "cooking" | "smoking" | "alcohol";

@@ -1,6 +1,7 @@
 import { PropertyStatus } from "@prisma/client";
 import { z } from "zod";
-import { enrichCommutes } from "@/lib/commute";
+import { fillCommuteQuotes } from "@/modules/commute";
+import { parseCommuteMode } from "@/lib/commute/modes";
 import { COMPARE_LIMIT } from "@/lib/constants";
 import { handleRouteError, jsonOk } from "@/lib/http";
 import type { ComparePg } from "@/lib/match-score";
@@ -13,7 +14,7 @@ const querySchema = z.object({
     .pipe(z.array(z.string().max(200)).min(1).max(COMPARE_LIMIT)),
   destLat: z.coerce.number().min(-90).max(90).optional(),
   destLng: z.coerce.number().min(-180).max(180).optional(),
-  mode: z.enum(["driving", "transit", "walking", "bicycling"]).default("transit"),
+  mode: z.string().default("metro"),
 });
 
 export async function GET(request: Request) {
@@ -39,10 +40,18 @@ export async function GET(request: Request) {
 
     const hasOrigin = query.destLat != null && query.destLng != null;
     const commutes = hasOrigin
-      ? await enrichCommutes(
-          rows.map((row) => ({ id: row.id, lat: row.latitude, lng: row.longitude })),
-          { lat: query.destLat!, lng: query.destLng! },
-          query.mode,
+      ? await fillCommuteQuotes(
+          rows.map((row) => ({
+            id: row.id,
+            lat: row.latitude,
+            lng: row.longitude,
+            rent: row.minRent,
+          })),
+          {
+            destLat: query.destLat!,
+            destLng: query.destLng!,
+            mode: parseCommuteMode(query.mode),
+          },
         )
       : null;
 
@@ -93,12 +102,16 @@ export async function GET(request: Request) {
           verificationLevel: row.verificationLevel,
           moveInFrom: row.moveInFrom?.toISOString() ?? null,
           availabilityConfirmedAt: row.availabilityConfirmedAt.toISOString(),
+          livabilityScore: row.livabilityScore,
+          safetyScore: row.safetyScore,
           commute: commute
             ? {
-                distanceKm: commute.distanceKm,
-                minutes: commute.minutes,
-                mode: commute.mode,
-                fromRoute: commute.fromRoute,
+                distanceKm: commute.selected.km,
+                minutes: commute.selected.minutes,
+                mode: commute.selected.mode,
+                fromRoute: commute.selected.fromRoute,
+                trueMonthlyCost: commute.trueMonthlyCost,
+                quotes: commute.quotes,
               }
             : null,
         },

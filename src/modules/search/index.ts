@@ -15,11 +15,19 @@ import { isAllowedPhotoUrl } from "@/lib/storage";
 import { SEARCH_PAGE_SIZE } from "@/lib/constants";
 import { matchAreasForQuery } from "@/modules/locations";
 import {
-  enrichCommutes,
   estimateRadiusKm,
   parseBounds,
   type TravelMode,
 } from "@/lib/commute";
+import { bboxForRadiusKm, cellFor } from "@/lib/geo/h3";
+import { parseCommuteMode } from "@/lib/commute/modes";
+import { parseArrivalTime } from "@/lib/commute/time";
+import {
+  cardFromCommute,
+  fillCommuteQuotes,
+  rankProperties,
+  type PropertyCommute,
+} from "@/modules/commute";
 
 export const searchFiltersSchema = z.object({
   city: z.string().optional(),
@@ -46,6 +54,7 @@ export const searchFiltersSchema = z.object({
       "newest",
       "freshness",
       "commute",
+      "true_cost",
     ])
     .optional(),
   page: z.coerce.number().int().min(1).optional(),
@@ -55,7 +64,14 @@ export const searchFiltersSchema = z.object({
   destLng: z.coerce.number().optional(),
   destLabel: z.string().optional(),
   commuteMax: z.coerce.number().int().positive().optional(),
-  mode: z.enum(["driving", "transit", "walking", "bicycling"]).optional(),
+  maxDailyCost: z.coerce.number().int().min(0).optional(),
+  arrivalTime: z.string().optional(),
+  commuteDays: z.coerce.number().int().min(1).max(31).optional(),
+  slot: z.enum(["peak", "offpeak"]).optional(),
+  rankingStyle: z.enum(["weighted", "fair"]).optional(),
+  dests: z.string().optional(),
+  metroLine: z.string().optional(),
+  mode: z.string().optional(),
   radiusKm: z.coerce.number().positive().optional(),
   /** south,west,north,east */
   bounds: z.string().optional(),
@@ -99,6 +115,24 @@ const cardInclude = {
 /** Upper bound on pins sent to the explore map; the list itself stays paginated. */
 const MAP_PIN_LIMIT = 2000;
 
+/** Ranking/geo filter payload — full card fields are loaded only for the current page. */
+const commuteRankSelect = {
+  id: true,
+  slug: true,
+  name: true,
+  latitude: true,
+  longitude: true,
+  minRent: true,
+  pgType: true,
+  featured: true,
+  ratingAvg: true,
+  verificationLevel: true,
+  availabilityConfirmedAt: true,
+  city: { select: { name: true } },
+  area: { select: { name: true } },
+  photos: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { url: true } },
+} satisfies Prisma.PropertySelect;
+
 const pinSelect = {
   id: true,
   slug: true,
@@ -126,6 +160,8 @@ export type MapPin = {
   commuteText: string | null;
   commuteMinutes: number | null;
   distanceKm: number | null;
+  trueMonthlyCost: number | null;
+  approximate: boolean;
 };
 
 function toMapPin(
@@ -141,7 +177,13 @@ function toMapPin(
     area: { name: string };
     photos: { url: string }[];
   },
-  commute?: { text: string; minutes: number | null; distanceKm: number } | null,
+  commute?: {
+    text: string;
+    minutes: number | null;
+    distanceKm: number;
+    trueMonthlyCost?: number;
+    approximate?: boolean;
+  } | null,
 ): MapPin {
   return {
     id: row.id,
@@ -157,6 +199,8 @@ function toMapPin(
     commuteText: commute?.text ?? null,
     commuteMinutes: commute?.minutes ?? null,
     distanceKm: commute?.distanceKm ?? null,
+    trueMonthlyCost: commute?.trueMonthlyCost ?? null,
+    approximate: commute?.approximate ?? false,
   };
 }
 
@@ -164,8 +208,17 @@ export type CardCommute = {
   minutes: number | null;
   distanceKm: number;
   text: string;
-  mode: TravelMode;
+  mode: string;
   fromRoute: boolean;
+  trueMonthlyCost?: number;
+  monthlyCommute?: number;
+  dailyCost?: number;
+  oneWayCost?: number;
+  approximate?: boolean;
+  computedAt?: string;
+  cheapest?: boolean;
+  fastest?: boolean;
+  recommended?: boolean;
 };
 
 export function toPublicCard(
@@ -200,6 +253,10 @@ export function toPublicCard(
       availableBeds: number;
       totalBeds: number;
     }[];
+    livabilityScore?: number | null;
+    safetyScore?: number | null;
+    commuteBadges?: string[];
+    tourVideoUrl?: string | null;
   },
   commute?: CardCommute | null,
 ) {
@@ -242,7 +299,36 @@ export function toPublicCard(
       totalBeds: rt.totalBeds,
     })),
     commute: commute ?? null,
+    livabilityScore: property.livabilityScore ?? null,
+    safetyScore: property.safetyScore ?? null,
+    commuteBadges: property.commuteBadges ?? [],
+    tourVideoUrl: property.tourVideoUrl ?? null,
   };
+}
+
+function parseExtraDests(raw?: string) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .slice(0, 3)
+      .flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const row = item as { lat?: number; lng?: number; tripsPerWeek?: number; weight?: number };
+        if (typeof row.lat !== "number" || typeof row.lng !== "number") return [];
+        return [
+          {
+            lat: row.lat,
+            lng: row.lng,
+            tripsPerWeek: row.tripsPerWeek ?? 5,
+            weight: row.weight ?? 1,
+          },
+        ];
+      });
+  } catch {
+    return [];
+  }
 }
 
 function applyNonGeoFilters(
@@ -340,7 +426,15 @@ export async function searchProperties(filters: SearchFilters) {
     typeof destLng === "number" &&
     !Number.isNaN(destLat) &&
     !Number.isNaN(destLng);
-  const mode: TravelMode = filters.mode ?? "transit";
+  const productMode = parseCommuteMode(filters.mode);
+  const mode: TravelMode =
+    productMode === "walk"
+      ? "walking"
+      : productMode === "cycle" || productMode === "rapido"
+        ? "bicycling"
+        : productMode === "auto" || productMode === "cab" || productMode === "own_vehicle"
+          ? "driving"
+          : "transit";
   const bounds = parseBounds(filters.bounds);
 
   // "near" alias: "lat,lng" string
@@ -446,90 +540,134 @@ export async function searchProperties(filters: SearchFilters) {
   }
 
   if (useCommutePath && typeof nearLat === "number" && typeof nearLng === "number") {
-    const radiusKm =
-      filters.radiusKm ?? estimateRadiusKm(filters.commuteMax, mode);
+    const radiusKm = filters.radiusKm ?? estimateRadiusKm(filters.commuteMax, mode);
+    const box = bounds ?? bboxForRadiusKm(nearLat, nearLng, radiusKm);
+    where.latitude = { gte: box.south, lte: box.north };
+    where.longitude = { gte: box.west, lte: box.east };
 
     let rows = await prisma.property.findMany({
       where,
-      include: cardInclude,
+      select: commuteRankSelect,
     });
 
-    if (bounds) {
-      rows = rows.filter(
-        (p) =>
-          p.latitude >= bounds.south &&
-          p.latitude <= bounds.north &&
-          p.longitude >= bounds.west &&
-          p.longitude <= bounds.east,
-      );
-    } else {
-      rows = rows.filter(
-        (p) => haversineKm(p.latitude, p.longitude, nearLat, nearLng) <= radiusKm,
-      );
-    }
+    rows = rows.filter(
+      (p) => haversineKm(p.latitude, p.longitude, nearLat, nearLng) <= radiusKm,
+    );
 
-    const commuteMap = await enrichCommutes(
-      rows.map((p) => ({ id: p.id, lat: p.latitude, lng: p.longitude })),
-      { lat: nearLat, lng: nearLng },
-      mode,
+    const extraDests = parseExtraDests(filters.dests);
+    const commutes = await fillCommuteQuotes(
+      rows.map((p) => ({ id: p.id, lat: p.latitude, lng: p.longitude, rent: p.minRent })),
+      {
+        destLat: nearLat,
+        destLng: nearLng,
+        destLabel: filters.destLabel,
+        mode: productMode,
+        slot: filters.slot ?? "peak",
+        arrivalTime: parseArrivalTime(filters.arrivalTime),
+        commuteDays: filters.commuteDays ?? 22,
+        maxMinutes: filters.commuteMax,
+        maxDailyCost: filters.maxDailyCost,
+        extraDests,
+        rankingStyle: filters.rankingStyle,
+      },
     );
 
     let enriched = rows.map((row) => ({
       row,
-      commute: commuteMap.get(row.id) ?? null,
+      profile: commutes.get(row.id) ?? null,
     }));
 
     if (filters.commuteMax) {
       enriched = enriched.filter((item) => {
-        if (!item.commute) return false;
-        // When route time is available, use it; otherwise keep if within radius.
-        if (item.commute.fromRoute && item.commute.minutes != null) {
-          return item.commute.minutes <= filters.commuteMax!;
-        }
-        return true;
+        const selected = item.profile?.selected;
+        if (!selected) return false;
+        return selected.minutes <= filters.commuteMax!;
+      });
+    }
+    if (filters.maxDailyCost != null) {
+      enriched = enriched.filter((item) => {
+        const selected = item.profile?.selected;
+        if (!selected) return false;
+        return selected.dailyCost <= filters.maxDailyCost!;
       });
     }
 
-    const sortMode = filters.sort ?? (useGeo ? "commute" : "relevance");
-    enriched.sort((a, b) => {
-      if (sortMode === "commute" || sortMode === "relevance") {
-        const minA = a.commute?.minutes ?? Number.POSITIVE_INFINITY;
-        const minB = b.commute?.minutes ?? Number.POSITIVE_INFINITY;
-        if (a.commute?.fromRoute && b.commute?.fromRoute && minA !== minB) {
+    const sortMode = filters.sort ?? (useGeo ? "true_cost" : "relevance");
+    if (sortMode === "true_cost" || sortMode === "relevance" || sortMode === "commute") {
+      if (sortMode === "commute") {
+        enriched.sort((a, b) => {
+          const minA = a.profile?.selected.minutes ?? Number.POSITIVE_INFINITY;
+          const minB = b.profile?.selected.minutes ?? Number.POSITIVE_INFINITY;
           return minA - minB;
-        }
-        const distA = a.commute?.distanceKm ?? Number.POSITIVE_INFINITY;
-        const distB = b.commute?.distanceKm ?? Number.POSITIVE_INFINITY;
-        if (distA !== distB) return distA - distB;
-        return sortByRelevance(a.row, b.row, areaScores);
-      }
-      if (sortMode === "rent") return a.row.minRent - b.row.minRent;
-      if (sortMode === "rent_desc") return b.row.minRent - a.row.minRent;
-      if (sortMode === "rating") return b.row.ratingAvg - a.row.ratingAvg;
-      if (sortMode === "freshness") {
-        return (
-          b.row.availabilityConfirmedAt.getTime() -
-          a.row.availabilityConfirmedAt.getTime()
+        });
+      } else {
+        const ranked = rankProperties(
+          enriched.map((item) => item.row),
+          new Map(
+            enriched.flatMap((item) =>
+              item.profile ? [[item.row.id, item.profile] as [string, PropertyCommute]] : [],
+            ),
+          ),
         );
+        const order = new Map(ranked.map((row, index) => [row.id, index]));
+        enriched.sort((a, b) => (order.get(a.row.id) ?? 0) - (order.get(b.row.id) ?? 0));
+        if (sortMode === "true_cost") {
+          enriched.sort(
+            (a, b) =>
+              (a.profile?.trueMonthlyCost ?? a.row.minRent) -
+              (b.profile?.trueMonthlyCost ?? b.row.minRent),
+          );
+        }
       }
-      return sortByRelevance(a.row, b.row, areaScores);
-    });
+    } else if (sortMode === "rent") {
+      enriched.sort((a, b) => a.row.minRent - b.row.minRent);
+    } else if (sortMode === "rent_desc") {
+      enriched.sort((a, b) => b.row.minRent - a.row.minRent);
+    } else if (sortMode === "rating") {
+      enriched.sort((a, b) => b.row.ratingAvg - a.row.ratingAvg);
+    } else if (sortMode === "freshness") {
+      enriched.sort(
+        (a, b) =>
+          b.row.availabilityConfirmedAt.getTime() - a.row.availabilityConfirmedAt.getTime(),
+      );
+    }
 
-    const total = enriched.length;
-    const pageRows = enriched.slice(
-      (page - 1) * SEARCH_PAGE_SIZE,
-      page * SEARCH_PAGE_SIZE,
-    );
+    const featured = enriched.filter((item) => item.row.featured);
+    const organic = enriched.filter((item) => !item.row.featured);
+    const ordered = [...organic];
+    if (featured.length) {
+      ordered.splice(Math.min(2, ordered.length), 0, ...featured.slice(0, 1));
+    }
+
+    const total = ordered.length;
+    const pageRows = ordered.slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
+    const cardCommute = (profile: PropertyCommute | null) =>
+      profile ? cardFromCommute(profile) : null;
+    const pageIds = pageRows.map((item) => item.row.id);
+    const fullRows =
+      pageIds.length === 0
+        ? []
+        : await prisma.property.findMany({
+            where: { id: { in: pageIds } },
+            include: cardInclude,
+          });
+    const fullById = new Map(fullRows.map((row) => [row.id, row]));
 
     return {
       total,
       page,
       pageSize: SEARCH_PAGE_SIZE,
-      results: pageRows.map((item) => toPublicCard(item.row, item.commute)),
-      pins: enriched
-        .slice(0, MAP_PIN_LIMIT)
-        .map((item) => toMapPin(item.row, item.commute)),
-      destination: destinationMeta,
+      results: pageRows.flatMap((item) => {
+        const full = fullById.get(item.row.id);
+        return full ? [toPublicCard(full, cardCommute(item.profile))] : [];
+      }),
+      pins: ordered.slice(0, MAP_PIN_LIMIT).map((item) => toMapPin(item.row, cardCommute(item.profile))),
+      destination: {
+        ...destinationMeta!,
+        mode: productMode,
+        slot: filters.slot ?? "peak",
+        arrivalTime: parseArrivalTime(filters.arrivalTime),
+      },
     };
   }
 
@@ -714,6 +852,7 @@ function listingFields(input: ListingInput) {
     address: input.address,
     latitude: input.latitude,
     longitude: input.longitude,
+    h3Cell: cellFor(input.latitude, input.longitude),
     pgType: input.pgType,
     preferredTenants: input.preferredTenants,
     foodIncluded,

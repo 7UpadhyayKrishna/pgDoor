@@ -5,7 +5,7 @@ export const OTP_TTL_MINUTES = 5;
 export const OTP_MAX_PER_WINDOW = 3;
 export const OTP_WINDOW_MINUTES = 10;
 
-export const COMPARE_LIMIT = 2;
+export const COMPARE_LIMIT = 4;
 export const SEARCH_PAGE_SIZE = 12;
 export const STALE_AVAILABILITY_DAYS = 3;
 
@@ -52,11 +52,11 @@ export const VERIFICATION_LABEL: Record<string, string> = {
 export const QUICK_CHIPS = [
   {
     label: "Near Cyber City",
-    href: "/pgs?destLat=28.4940&destLng=77.0881&destLabel=Cyber%20City&commuteMax=20&mode=transit&budgetMax=15000&sort=commute",
+    href: "/pgs?destLat=28.4940&destLng=77.0881&destLabel=Cyber%20City&commuteMax=20&mode=metro&budgetMax=15000&sort=true_cost",
   },
   {
     label: "Near Noida Sec 62",
-    href: "/pgs?destLat=28.6270&destLng=77.3649&destLabel=Noida%20Sector%2062&commuteMax=20&mode=transit&budgetMax=12000&sort=commute",
+    href: "/pgs?destLat=28.6270&destLng=77.3649&destLabel=Noida%20Sector%2062&commuteMax=20&mode=metro&budgetMax=12000&sort=true_cost",
   },
   { label: "Under ₹10K", href: "/pgs?budgetMax=10000" },
   { label: "Single room", href: "/pgs?sharing=SINGLE" },
@@ -69,6 +69,7 @@ export const NAV = {
   desktop: [
     { label: "Find PGs", href: "/pgs" },
     { label: "Explore", href: "/pgs?view=map" },
+    { label: "Roommates", href: "/roommates" },
     { label: "For Owners", href: "/owners" },
   ],
   mobile: [

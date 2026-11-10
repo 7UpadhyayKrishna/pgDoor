@@ -140,6 +140,61 @@ enum LandmarkType {
   OTHER
 }
 
+enum DestinationType {
+  COLLEGE
+  OFFICE
+  COACHING
+  LIBRARY
+  METRO
+  CUSTOM
+}
+
+enum CommuteMode {
+  walk
+  cycle
+  metro
+  rapid_metro
+  bus
+  auto
+  shared_auto
+  rapido
+  cab
+  own_vehicle
+}
+
+enum CommuteSlot {
+  peak
+  offpeak
+}
+
+enum CommuteSource {
+  google
+  fare_table
+  estimate
+}
+
+enum PoiCategory {
+  FOOD
+  GROCERY
+  METRO
+  BUS_STOP
+  HOSPITAL
+  PHARMACY
+  GYM
+  LAUNDRY
+  CAFE
+  ATM
+  PARK
+  LIBRARY
+  POLICE
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  WHATSAPP
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -151,16 +206,21 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  ownerProfile    OwnerProfile?
-  leads           Lead[]
-  savedProperties SavedProperty[]
-  reviews         Review[]
-  reports         Report[]
-  sessions        Session[]
-  otpCodes        OtpCode[]
-  auditLogs       AuditLog[]
-  leadEvents      LeadEvent[]
-  chatMessages    ChatMessage[]
+  ownerProfile     OwnerProfile?
+  leads            Lead[]
+  savedProperties  SavedProperty[]
+  reviews          Review[]
+  reports          Report[]
+  sessions         Session[]
+  otpCodes         OtpCode[]
+  auditLogs        AuditLog[]
+  leadEvents       LeadEvent[]
+  chatMessages     ChatMessage[]
+  searches         UserSearch[]
+  alerts           Alert[]
+  roommateProfile  RoommateProfile?
+  roommateMatchesA RoommateMatch[]  @relation("RoommateA")
+  roommateMatchesB RoommateMatch[]  @relation("RoommateB")
 }
 
 model Session {
@@ -210,9 +270,10 @@ model City {
   latitude  Float?
   longitude Float?
 
-  areas      Area[]
-  landmarks  Landmark[]
-  properties Property[]
+  areas        Area[]
+  landmarks    Landmark[]
+  properties   Property[]
+  destinations Destination[]
 }
 
 model Area {
@@ -257,6 +318,14 @@ model Property {
   areaId                  String
   latitude                Float
   longitude               Float
+  h3Cell                  String?
+  livabilityScore         Float?
+  livabilityBreakdown     Json?
+  safetyScore             Float?
+  safetyBreakdown         Json?
+  commuteBadges           String[]          @default([])
+  tourVideoUrl            String?
+  tourThumbnailUrl        String?
   pgType                  PgType
   status                  PropertyStatus    @default(PENDING_REVIEW)
   verificationLevel       VerificationLevel @default(UNVERIFIED)
@@ -307,11 +376,15 @@ model Property {
   verificationChecks    VerificationCheck[]
   availabilityReminders AvailabilityReminder[]
   leadEvents            LeadEvent[]
+  commuteEdges          CommuteEdge[]
+  propertyPois          PropertyPoi[]
 
   @@index([cityId, status])
   @@index([areaId, status])
   @@index([status, featured, minRent])
   @@index([availableBeds])
+  @@index([h3Cell])
+  @@index([latitude, longitude])
 }
 
 model RoomType {
@@ -445,15 +518,16 @@ model LeadEvent {
 }
 
 model Review {
-  id         String   @id @default(cuid())
-  userId     String
-  propertyId String
-  overall    Float
-  comment    String?  @db.Text
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id])
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  scores     ReviewScore?
+  id           String   @id @default(cuid())
+  userId       String
+  propertyId   String
+  overall      Float
+  comment      String?  @db.Text
+  verifiedStay Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  scores       ReviewScore?
 
   @@unique([userId, propertyId])
 }
@@ -466,6 +540,9 @@ model ReviewScore {
   location    Float
   management  Float
   value       Float
+  commute     Float  @default(0)
+  safety      Float  @default(0)
+  owner       Float  @default(0)
   review      Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 }
 
@@ -521,4 +598,144 @@ model AuditLog {
   actor      User?    @relation(fields: [actorId], references: [id])
 
   @@index([entityType, entityId])
+}
+
+model Destination {
+  id         String          @id @default(cuid())
+  name       String
+  slug       String          @unique
+  type       DestinationType
+  cityId     String?
+  latitude   Float
+  longitude  Float
+  h3Cell     String
+  aliases    String[]        @default([])
+  popularity Int             @default(0)
+  metroLine  String?
+  seoEnabled Boolean         @default(false)
+  city       City?           @relation(fields: [cityId], references: [id])
+
+  @@index([popularity])
+  @@index([h3Cell])
+  @@index([type])
+  @@index([seoEnabled])
+}
+
+model CommuteEdge {
+  id          String        @id @default(cuid())
+  propertyId  String
+  destH3      String
+  mode        CommuteMode
+  slot        CommuteSlot
+  minutes     Int
+  km          Float
+  oneWayCost  Int
+  legs        Json?
+  source      CommuteSource
+  computedAt  DateTime      @default(now())
+  approximate Boolean       @default(false)
+  property    Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, destH3, mode, slot])
+  @@index([destH3, mode, slot])
+  @@index([computedAt])
+}
+
+model FareRule {
+  id             String      @id @default(cuid())
+  mode           CommuteMode
+  city           String
+  effectiveFrom  DateTime
+  slabs          Json?
+  base           Float?
+  perKm          Float?
+  perMin         Float?
+  peakMultiplier Float       @default(1)
+  sourceUrl      String
+  estimate       Boolean     @default(false)
+
+  @@index([mode, city, effectiveFrom])
+}
+
+model Poi {
+  id           String       @id @default(cuid())
+  osmOrPlaceId String       @unique
+  name         String
+  category     PoiCategory
+  latitude     Float
+  longitude    Float
+  rating       Float?
+  openLate     Boolean      @default(false)
+  source       String       @default("places")
+  properties   PropertyPoi[]
+
+  @@index([category])
+}
+
+model PropertyPoi {
+  propertyId     String
+  poiId          String
+  walkingMinutes Int
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  poi            Poi      @relation(fields: [poiId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, poiId])
+}
+
+model UserSearch {
+  id           String   @id @default(cuid())
+  userId       String?
+  name         String?
+  destinations Json
+  prefs        Json
+  arrivalTime  String   @default("09:30")
+  maxMin       Int?
+  maxCost      Int?
+  createdAt    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alerts       Alert[]
+
+  @@index([userId])
+}
+
+model Alert {
+  id           String              @id @default(cuid())
+  userId       String
+  userSearchId String?
+  propertyId   String?
+  channel      NotificationChannel @default(IN_APP)
+  title        String
+  body         String
+  readAt       DateTime?
+  createdAt    DateTime            @default(now())
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userSearch   UserSearch?         @relation(fields: [userSearchId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model RoommateProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  destH3    String?
+  destLabel String?
+  bio       String?  @db.Text
+  habits    Json
+  optIn     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RoommateMatch {
+  id        String   @id @default(cuid())
+  aUserId   String
+  bUserId   String
+  aAccepted Boolean  @default(false)
+  bAccepted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  aUser     User     @relation("RoommateA", fields: [aUserId], references: [id], onDelete: Cascade)
+  bUser     User     @relation("RoommateB", fields: [bUserId], references: [id], onDelete: Cascade)
+
+  @@unique([aUserId, bUserId])
 }
