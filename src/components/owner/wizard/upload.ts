@@ -61,13 +61,17 @@ function put(url: string, blob: Blob, onProgress: (pct: number) => void) {
   });
 }
 
-export async function uploadPhoto(file: File, onProgress: (pct: number) => void) {
+export async function uploadPhoto(
+  file: File,
+  onProgress: (pct: number) => void,
+  scope?: "verification",
+) {
   const blob = await compressImage(file);
   const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
   const res = await fetch("/api/media/presign", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fileName: `${baseName}.jpg`, mimeType: blob.type, size: blob.size }),
+    body: JSON.stringify({ fileName: `${baseName}.jpg`, mimeType: blob.type, size: blob.size, scope }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Could not start the upload");

@@ -9,7 +9,7 @@ import { HttpError } from "@/lib/rbac";
 export const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
 const MAX_BYTES = 5 * 1024 * 1024;
 
-export type UploadScope = "drafts" | "properties";
+export type UploadScope = "drafts" | "properties" | "verification";
 
 let client: SupabaseClient | null = null;
 

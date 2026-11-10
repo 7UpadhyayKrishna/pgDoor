@@ -29,20 +29,34 @@ const STEPS = [
 
 const DRAFT_KEY = "pgdoor:listing-draft";
 
+export type CreatedListing = { id: string; slug: string; status: string; name?: string };
+
 type Props = {
   cities: WizardCity[];
   amenities: WizardAmenity[];
   loggedIn: boolean;
   launchLabel: string;
-} & ({ mode: "create" } | { mode: "edit"; propertyId: string; initialDraft: ListingDraft });
+  /** Overrides the owner API endpoint, e.g. for admins listing on an owner's behalf. */
+  submitUrl?: string;
+  draftKey?: string | null;
+  afterSaveHref?: string;
+  /** Replaces the built-in "submitted" screen after a create. */
+  onCreated?: (property: CreatedListing) => void;
+} & (
+  | { mode: "create"; prefill?: Partial<ListingDraft> }
+  | { mode: "edit"; propertyId: string; initialDraft: ListingDraft }
+);
 
 export function ListingWizard(props: Props) {
-  const { cities, amenities, loggedIn, launchLabel } = props;
+  const { cities, amenities, loggedIn, launchLabel, onCreated } = props;
   const router = useRouter();
   const editing = props.mode === "edit";
+  const submitUrl =
+    props.submitUrl ?? (editing ? `/api/owners/properties/${props.propertyId}` : "/api/owners/properties");
+  const afterSaveHref = props.afterSaveHref ?? "/owners/properties?saved=1";
   const { draft, update, step, setStep, clear, hydrated } = useListingDraft(
-    editing ? null : DRAFT_KEY,
-    editing ? props.initialDraft : emptyDraft(),
+    editing ? null : props.draftKey === undefined ? DRAFT_KEY : props.draftKey,
+    editing ? props.initialDraft : { ...emptyDraft(), ...props.prefill },
   );
   const [errors, setErrors] = useState<StepErrors>({});
   const [submitError, setSubmitError] = useState("");
@@ -95,7 +109,7 @@ export function ListingWizard(props: Props) {
     setSubmitting(true);
     setSubmitError("");
     try {
-      const res = await fetch(editing ? `/api/owners/properties/${props.propertyId}` : "/api/owners/properties", {
+      const res = await fetch(submitUrl, {
         method: editing ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(draftToPayload(draft)),
@@ -106,11 +120,15 @@ export function ListingWizard(props: Props) {
         return;
       }
       if (editing) {
-        router.push("/owners/properties?saved=1");
+        router.push(afterSaveHref);
         router.refresh();
         return;
       }
       clear();
+      if (onCreated) {
+        onCreated(data.property as CreatedListing);
+        return;
+      }
       setDone(true);
       router.refresh();
     } catch {

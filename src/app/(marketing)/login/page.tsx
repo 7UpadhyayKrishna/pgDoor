@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { PhoneLogin } from "@/components/auth/phone-login";
+import { LoginMethods } from "@/components/auth/login-methods";
 
 export default function LoginPage() {
   return (
@@ -11,7 +11,7 @@ export default function LoginPage() {
         </p>
         <div className="mt-6">
           <Suspense>
-            <PhoneLogin />
+            <LoginMethods />
           </Suspense>
         </div>
       </div>

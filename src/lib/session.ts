@@ -84,6 +84,7 @@ export async function getCurrentUser(opts?: {
       role: payload.role,
       phoneVerified: true,
       ownerProfileId: payload.role === "OWNER" || payload.role === "ADMIN" ? "soft" : null,
+      mustChangePassword: false,
     };
   }
 
@@ -112,6 +113,7 @@ export async function getCurrentUser(opts?: {
     role: user.role,
     phoneVerified: user.phoneVerified,
     ownerProfileId: user.ownerProfile?.id ?? null,
+    mustChangePassword: user.mustChangePassword,
   };
 }
 
@@ -133,6 +135,10 @@ export async function requireOwner() {
   if (!user.ownerProfileId && user.role !== "ADMIN") {
     const { HttpError } = await import("@/lib/rbac");
     throw new HttpError(403, "Complete owner registration first");
+  }
+  if (user.mustChangePassword) {
+    const { HttpError } = await import("@/lib/rbac");
+    throw new HttpError(403, "Set a new password before continuing");
   }
   return user;
 }
@@ -163,6 +169,9 @@ export async function requireUserPage(next: string) {
 
 export async function requireOwnerPage(next: string) {
   const user = await requireUserPage(next);
+  if (user.mustChangePassword) {
+    redirect(`/owners/change-password?next=${encodeURIComponent(next)}`);
+  }
   if (user.role === "ADMIN") return user;
   if (user.role !== "OWNER" || !user.ownerProfileId) redirect("/owners/register");
   return user;

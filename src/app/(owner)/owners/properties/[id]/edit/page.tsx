@@ -24,14 +24,17 @@ export default async function EditPropertyPage({ params }: { params: Promise<{ i
     prisma.amenity.findMany({ orderBy: { name: "asc" }, select: { slug: true, name: true, group: true } }),
   ]);
 
+  const isAdmin = user.role === "ADMIN";
+  const backHref = isAdmin ? `/admin/pgs/${property.id}` : "/owners/properties";
+
   return (
     <div className="max-w-2xl">
       <Link
-        href="/owners/properties"
+        href={backHref}
         className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-ink/70 hover:text-ink"
       >
         <ArrowLeft className="h-4 w-4" />
-        My listings
+        {isAdmin ? "Back to admin" : "My listings"}
       </Link>
       <h1 className="mt-1 text-2xl font-bold">Edit {property.name}</h1>
       <div className="mt-6">
@@ -43,6 +46,7 @@ export default async function EditPropertyPage({ params }: { params: Promise<{ i
           amenities={amenities}
           loggedIn
           launchLabel={LAUNCH_DATE_LABEL}
+          afterSaveHref={isAdmin ? backHref : undefined}
         />
       </div>
     </div>

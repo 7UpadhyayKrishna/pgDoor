@@ -8,6 +8,7 @@ export type AuthUser = {
   role: UserRole;
   phoneVerified: boolean;
   ownerProfileId: string | null;
+  mustChangePassword: boolean;
 };
 
 export function isOwner(user: AuthUser | null) {

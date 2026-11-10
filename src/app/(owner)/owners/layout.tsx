@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, CalendarCheck, LayoutDashboard, LogOut, MessageSquare } from "lucide-react";
+import { Building2, CalendarCheck, KeyRound, LayoutDashboard, LogOut, MessageSquare } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ const links = [
   { href: "/owners/properties", label: "Properties", icon: Building2 },
   { href: "/owners/leads", label: "Leads", icon: MessageSquare },
   { href: "/owners/availability", label: "Availability", icon: CalendarCheck },
+  { href: "/owners/change-password", label: "Password", icon: KeyRound },
 ];
 
 export default async function OwnerLayout({

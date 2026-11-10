@@ -12,8 +12,12 @@ export async function PUT(request: Request) {
     }
     const url = new URL(request.url);
     const key = url.searchParams.get("key");
-    if (!key || key.includes("..") || !/^(drafts|properties)\//.test(key)) {
+    if (!key || key.includes("..") || !/^(drafts|properties|verification)\//.test(key)) {
       return jsonError("Invalid key", 400);
+    }
+    if (key.startsWith("verification/")) {
+      const user = await getCurrentUser();
+      if (user?.role !== "ADMIN") return jsonError("Admin access required", 403);
     }
     if (key.startsWith("properties/")) {
       const user = await getCurrentUser();

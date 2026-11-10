@@ -130,6 +130,40 @@ enum VerificationCheckType {
   AVAILABILITY
 }
 
+enum CheckStatus {
+  PENDING
+  PASSED
+  FAILED
+  NOT_APPLICABLE
+}
+
+enum ProspectSource {
+  FIELD_VISIT
+  REFERRAL
+  INBOUND
+  CALL
+  OTHER
+}
+
+enum ProspectStage {
+  NEW
+  CONTACTED
+  INTERESTED
+  VISIT_SCHEDULED
+  LISTED
+  ONBOARDED
+  LOST
+}
+
+enum ProspectActivityType {
+  NOTE
+  CALL
+  WHATSAPP
+  VISIT
+  STAGE_CHANGE
+  FOLLOW_UP
+}
+
 enum LandmarkType {
   METRO
   COLLEGE
@@ -196,31 +230,37 @@ enum NotificationChannel {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  phone         String    @unique
-  email         String?   @unique
-  role          UserRole  @default(SEEKER)
-  phoneVerified Boolean   @default(false)
-  blocked       Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  name               String?
+  phone              String    @unique
+  email              String?   @unique
+  role               UserRole  @default(SEEKER)
+  phoneVerified      Boolean   @default(false)
+  blocked            Boolean   @default(false)
+  passwordHash       String?
+  mustChangePassword Boolean   @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  ownerProfile     OwnerProfile?
-  leads            Lead[]
-  savedProperties  SavedProperty[]
-  reviews          Review[]
-  reports          Report[]
-  sessions         Session[]
-  otpCodes         OtpCode[]
-  auditLogs        AuditLog[]
-  leadEvents       LeadEvent[]
-  chatMessages     ChatMessage[]
-  searches         UserSearch[]
-  alerts           Alert[]
-  roommateProfile  RoommateProfile?
-  roommateMatchesA RoommateMatch[]  @relation("RoommateA")
-  roommateMatchesB RoommateMatch[]  @relation("RoommateB")
+  ownerProfile       OwnerProfile?
+  leads              Lead[]
+  savedProperties    SavedProperty[]
+  reviews            Review[]
+  reports            Report[]
+  sessions           Session[]
+  otpCodes           OtpCode[]
+  auditLogs          AuditLog[]
+  leadEvents         LeadEvent[]
+  chatMessages       ChatMessage[]
+  searches           UserSearch[]
+  alerts             Alert[]
+  roommateProfile    RoommateProfile?
+  roommateMatchesA   RoommateMatch[]     @relation("RoommateA")
+  roommateMatchesB   RoommateMatch[]     @relation("RoommateB")
+  checksDone         VerificationCheck[] @relation("VerificationChecker")
+  assignedProspects  OwnerProspect[]     @relation("ProspectAssignee")
+  prospectActivities ProspectActivity[]
 }
 
 model Session {
@@ -253,12 +293,15 @@ model OwnerProfile {
   userId             String                  @unique
   businessName       String?
   verificationStatus OwnerVerificationStatus @default(UNVERIFIED)
+  createdByAdminId   String?
+  credentialIssuedAt DateTime?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   properties Property[]
   leads      Lead[]
+  prospects  OwnerProspect[]
 }
 
 model City {
@@ -274,19 +317,21 @@ model City {
   landmarks    Landmark[]
   properties   Property[]
   destinations Destination[]
+  prospects    OwnerProspect[]
 }
 
 model Area {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   cityId    String
   name      String
   slug      String
   latitude  Float?
   longitude Float?
 
-  city       City       @relation(fields: [cityId], references: [id])
+  city       City            @relation(fields: [cityId], references: [id])
   properties Property[]
   landmarks  Landmark[]
+  prospects  OwnerProspect[]
 
   @@unique([cityId, slug])
 }
@@ -301,7 +346,7 @@ model Landmark {
   latitude  Float
   longitude Float?
 
-  city City @relation(fields: [cityId], references: [id])
+  city City  @relation(fields: [cityId], references: [id])
   area Area? @relation(fields: [areaId], references: [id])
 
   @@unique([cityId, slug])
@@ -467,9 +512,9 @@ model Lead {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  seeker   User         @relation(fields: [seekerId], references: [id])
-  property Property     @relation(fields: [propertyId], references: [id])
-  owner    OwnerProfile @relation(fields: [ownerId], references: [id])
+  seeker   User          @relation(fields: [seekerId], references: [id])
+  property Property      @relation(fields: [propertyId], references: [id])
+  owner    OwnerProfile  @relation(fields: [ownerId], references: [id])
   visits   Visit[]
   events   LeadEvent[]
   messages ChatMessage[]
@@ -518,15 +563,15 @@ model LeadEvent {
 }
 
 model Review {
-  id           String   @id @default(cuid())
+  id           String       @id @default(cuid())
   userId       String
   propertyId   String
   overall      Float
-  comment      String?  @db.Text
-  verifiedStay Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id])
-  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  comment      String?      @db.Text
+  verifiedStay Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  user         User         @relation(fields: [userId], references: [id])
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   scores       ReviewScore?
 
   @@unique([userId, propertyId])
@@ -569,14 +614,64 @@ model Report {
 }
 
 model VerificationCheck {
-  id         String                @id @default(cuid())
-  propertyId String
-  type       VerificationCheckType
-  passed     Boolean               @default(false)
-  checkedAt  DateTime?
-  property   Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id           String                @id @default(cuid())
+  propertyId   String
+  type         VerificationCheckType
+  passed       Boolean               @default(false)
+  status       CheckStatus           @default(PENDING)
+  notes        String?               @db.Text
+  evidenceUrls String[]              @default([])
+  checkedById  String?
+  checkedAt    DateTime?
+  property     Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  checkedBy    User?                 @relation("VerificationChecker", fields: [checkedById], references: [id], onDelete: SetNull)
 
   @@unique([propertyId, type])
+}
+
+model OwnerProspect {
+  id             String         @id @default(cuid())
+  name           String
+  phone          String
+  businessName   String?
+  pgName         String?
+  cityId         String?
+  areaId         String?
+  address        String?
+  approxBeds     Int?
+  source         ProspectSource @default(OTHER)
+  stage          ProspectStage  @default(NEW)
+  assignedToId   String?
+  nextFollowUpAt DateTime?
+  lostReason     String?
+  ownerProfileId String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  city         City?              @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  area         Area?              @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  assignedTo   User?              @relation("ProspectAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  ownerProfile OwnerProfile?      @relation(fields: [ownerProfileId], references: [id], onDelete: SetNull)
+  activities   ProspectActivity[]
+
+  @@index([stage, nextFollowUpAt])
+  @@index([phone])
+  @@index([assignedToId])
+}
+
+model ProspectActivity {
+  id         String               @id @default(cuid())
+  prospectId String
+  actorId    String?
+  type       ProspectActivityType
+  body       String?              @db.Text
+  metadata   Json?
+  createdAt  DateTime             @default(now())
+
+  prospect OwnerProspect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  actor    User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([prospectId, createdAt])
 }
 
 model AvailabilityReminder {
@@ -658,15 +753,15 @@ model FareRule {
 }
 
 model Poi {
-  id           String       @id @default(cuid())
-  osmOrPlaceId String       @unique
+  id           String        @id @default(cuid())
+  osmOrPlaceId String        @unique
   name         String
   category     PoiCategory
   latitude     Float
   longitude    Float
   rating       Float?
-  openLate     Boolean      @default(false)
-  source       String       @default("places")
+  openLate     Boolean       @default(false)
+  source       String        @default("places")
   properties   PropertyPoi[]
 
   @@index([category])
