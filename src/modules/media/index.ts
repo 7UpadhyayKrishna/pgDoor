@@ -7,8 +7,8 @@ export const presignSchema = z.object({
   fileName: z.string().min(1).max(200),
   mimeType: z.enum(ALLOWED_IMAGE_MIME),
   size: z.number().int().positive(),
-  /** Admin-only: evidence photos for the verification checklist. */
-  scope: z.enum(["verification"]).optional(),
+  /** Admin-only: verification evidence photos and blog images. */
+  scope: z.enum(["verification", "blog"]).optional(),
 });
 
 export async function presignPhoto(input: z.infer<typeof presignSchema>, scope: UploadScope) {

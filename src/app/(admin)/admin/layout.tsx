@@ -11,6 +11,7 @@ const links = [
   { href: "/admin/crm", label: "CRM" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/leads", label: "Leads" },
+  { href: "/admin/blog", label: "Blog" },
 ];
 
 export default async function AdminLayout({

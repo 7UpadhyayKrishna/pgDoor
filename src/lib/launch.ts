@@ -14,7 +14,6 @@ const PRELAUNCH_BLOCKED_PAGES = [
   "/roommates",
   "/account",
   "/register",
-  "/blog",
   "/about",
   "/help",
 ];

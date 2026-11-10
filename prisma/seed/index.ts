@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { seedReference } from "./reference";
 import { seedDemoPgs, upsertDemoOwner } from "./samples";
 import { seedTestPgs } from "./test-pgs";
+import { seedBlog } from "./blog";
 
 const prisma = new PrismaClient();
 
@@ -66,8 +67,9 @@ async function main() {
     `Test PGs (Noida + Greater Noida): inserted ${testPgs.inserted}, skipped ${testPgs.skipped} existing`,
   );
 
-  console.info("Seeded NCR cities, amenities, demo PGs, admin +919999999999, owner +919876543210");
-  void admin;
+  await seedBlog(prisma, admin.id);
+
+  console.info("Seeded NCR cities, amenities, demo PGs, blog sample, admin +919999999999, owner +919876543210");
 }
 
 main()

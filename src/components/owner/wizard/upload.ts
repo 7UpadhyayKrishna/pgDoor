@@ -64,7 +64,7 @@ function put(url: string, blob: Blob, onProgress: (pct: number) => void) {
 export async function uploadPhoto(
   file: File,
   onProgress: (pct: number) => void,
-  scope?: "verification",
+  scope?: "verification" | "blog",
 ) {
   const blob = await compressImage(file);
   const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";

@@ -229,6 +229,19 @@ enum NotificationChannel {
   WHATSAPP
 }
 
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum BlogSchemaType {
+  BLOG_POSTING
+  ARTICLE
+  HOW_TO
+  NEWS_ARTICLE
+}
+
 model User {
   id                 String    @id @default(cuid())
   name               String?
@@ -243,25 +256,26 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  ownerProfile       OwnerProfile?
-  leads              Lead[]
-  savedProperties    SavedProperty[]
-  reviews            Review[]
-  reports            Report[]
-  sessions           Session[]
-  otpCodes           OtpCode[]
-  auditLogs          AuditLog[]
-  leadEvents         LeadEvent[]
-  chatMessages       ChatMessage[]
-  searches           UserSearch[]
-  alerts             Alert[]
+  ownerProfile        OwnerProfile?
+  leads               Lead[]
+  savedProperties     SavedProperty[]
+  reviews             Review[]
+  reports             Report[]
+  sessions            Session[]
+  otpCodes            OtpCode[]
+  auditLogs           AuditLog[]
+  leadEvents          LeadEvent[]
+  chatMessages        ChatMessage[]
+  searches            UserSearch[]
+  alerts              Alert[]
   availabilityWatches AvailabilityWatch[]
-  roommateProfile    RoommateProfile?
-  roommateMatchesA   RoommateMatch[]     @relation("RoommateA")
-  roommateMatchesB   RoommateMatch[]     @relation("RoommateB")
-  checksDone         VerificationCheck[] @relation("VerificationChecker")
-  assignedProspects  OwnerProspect[]     @relation("ProspectAssignee")
-  prospectActivities ProspectActivity[]
+  blogAuthor          BlogAuthor?
+  roommateProfile     RoommateProfile?
+  roommateMatchesA    RoommateMatch[]     @relation("RoommateA")
+  roommateMatchesB    RoommateMatch[]     @relation("RoommateB")
+  checksDone          VerificationCheck[] @relation("VerificationChecker")
+  assignedProspects   OwnerProspect[]     @relation("ProspectAssignee")
+  prospectActivities  ProspectActivity[]
 }
 
 model Session {
@@ -319,6 +333,7 @@ model City {
   properties   Property[]
   destinations Destination[]
   prospects    OwnerProspect[]
+  blogPosts    BlogPost[]
 }
 
 model Area {
@@ -333,6 +348,7 @@ model Area {
   properties Property[]
   landmarks  Landmark[]
   prospects  OwnerProspect[]
+  blogPosts  BlogPost[]
 
   @@unique([cityId, slug])
 }
@@ -862,4 +878,122 @@ model RoommateMatch {
   bUser     User     @relation("RoommateB", fields: [bUserId], references: [id], onDelete: Cascade)
 
   @@unique([aUserId, bUserId])
+}
+
+/// E-E-A-T profile shown on posts; optionally linked to the admin who writes as them.
+model BlogAuthor {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  jobTitle    String?
+  bio         String?    @db.Text
+  credentials String?
+  expertise   String[]   @default([])
+  avatarUrl   String?
+  sameAs      String[]   @default([])
+  userId      String?    @unique
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  posts       BlogPost[] @relation("BlogPostAuthor")
+  reviewed    BlogPost[] @relation("BlogPostReviewer")
+}
+
+model BlogCategory {
+  id              String     @id @default(cuid())
+  slug            String     @unique
+  name            String
+  description     String?    @db.Text
+  seoTitle        String?
+  metaDescription String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  posts           BlogPost[]
+}
+
+model BlogTag {
+  id              String        @id @default(cuid())
+  slug            String        @unique
+  name            String
+  description     String?       @db.Text
+  seoTitle        String?
+  metaDescription String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  posts           BlogPostTag[]
+}
+
+model BlogPostTag {
+  postId String
+  tagId  String
+  post   BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    BlogTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@index([tagId])
+}
+
+model BlogPost {
+  id                 String         @id @default(cuid())
+  slug               String         @unique
+  title              String
+  subtitle           String?
+  excerpt            String?        @db.Text
+  /// Tiptap/ProseMirror JSON document.
+  contentJson        Json
+  status             BlogStatus     @default(DRAFT)
+  publishedAt        DateTime?
+  authorId           String?
+  reviewerId         String?
+  categoryId         String?
+  coverImageUrl      String?
+  coverAlt           String?
+  // Derived from contentJson on every save.
+  wordCount          Int            @default(0)
+  readingMinutes     Int            @default(0)
+  toc                Json           @default("[]")
+  plainText          String         @default("") @db.Text
+  // SEO
+  seoTitle           String?
+  metaDescription    String?
+  focusKeyword       String?
+  secondaryKeywords  String[]       @default([])
+  canonicalUrl       String?
+  noindex            Boolean        @default(false)
+  nofollow           Boolean        @default(false)
+  ogTitle            String?
+  ogDescription      String?
+  ogImageUrl         String?
+  twitterTitle       String?
+  twitterDescription String?
+  schemaType         BlogSchemaType @default(BLOG_POSTING)
+  // AEO
+  tldr               String?        @db.Text
+  keyTakeaways       String[]       @default([])
+  faqs               Json           @default("[]")
+  howToSteps         Json           @default("[]")
+  speakable          Boolean        @default(true)
+  // GEO
+  aiSummary          String?        @db.Text
+  statistics         Json           @default("[]")
+  citations          Json           @default("[]")
+  entities           Json           @default("[]")
+  lastFactCheckedAt  DateTime?
+  targetCityId       String?
+  targetAreaId       String?
+  // Internal links
+  relatedPropertyIds String[]       @default([])
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  author     BlogAuthor?   @relation("BlogPostAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  reviewer   BlogAuthor?   @relation("BlogPostReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  category   BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  targetCity City?         @relation(fields: [targetCityId], references: [id], onDelete: SetNull)
+  targetArea Area?         @relation(fields: [targetAreaId], references: [id], onDelete: SetNull)
+  tags       BlogPostTag[]
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+  @@index([authorId])
 }

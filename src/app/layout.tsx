@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { siteUrl } from "@/lib/site";
+import { organizationJsonLd, websiteJsonLd } from "@/modules/blog/jsonld";
+import { JsonLd } from "@/components/blog/json-ld";
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -39,8 +41,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en-IN">
       <body className={`${plusJakarta.variable} font-sans antialiased min-h-screen bg-canvas text-ink`}>
+        <JsonLd data={[organizationJsonLd(siteUrl()), websiteJsonLd(siteUrl())]} />
         {children}
       </body>
     </html>

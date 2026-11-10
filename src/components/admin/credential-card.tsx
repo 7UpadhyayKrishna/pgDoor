@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, KeyRound, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { siteUrl } from "@/lib/site";
 
 export type Credential = {
   name: string | null;
@@ -11,8 +12,7 @@ export type Credential = {
 };
 
 function loginUrl() {
-  const base = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
-  return `${base.replace(/\/$/, "")}/login`;
+  return `${siteUrl()}/login`;
 }
 
 export function credentialMessage(credential: Credential, pgName?: string) {

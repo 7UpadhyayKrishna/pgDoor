@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       throw new HttpError(429, "Too many uploads. Please try again in a while.");
     }
     const body = presignSchema.parse(await request.json());
-    if (body.scope === "verification" && user?.role !== "ADMIN") {
+    if ((body.scope === "verification" || body.scope === "blog") && user?.role !== "ADMIN") {
       throw new HttpError(403, "Admin access required");
     }
     const result = await presignPhoto(body, body.scope ?? (isOwner ? "properties" : "drafts"));

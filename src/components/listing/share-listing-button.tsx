@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Share2 } from "lucide-react";
+import { siteUrl } from "@/lib/site";
 
 export function ShareListingButton({
   slug,
@@ -13,8 +14,7 @@ export function ShareListingButton({
   const [copied, setCopied] = useState(false);
 
   async function share() {
-    const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || window.location.origin;
-    const url = `${base}/pg/${slug}`;
+    const url = `${siteUrl()}/pg/${slug}`;
 
     try {
       if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
