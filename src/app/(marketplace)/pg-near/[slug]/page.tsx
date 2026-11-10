@@ -14,9 +14,13 @@ export async function generateMetadata({
   const { slug } = await params;
   const dest = await getDestinationBySlug(slug);
   if (!dest) return { title: "PGs nearby" };
+  const title = `PGs near ${dest.name}`;
+  const description = `Find PGs near ${dest.name} ranked by commute time and true monthly cost (rent + fare).`;
   return {
-    title: `PGs near ${dest.name} | pgDoor`,
-    description: `Find PGs near ${dest.name} ranked by commute time and true monthly cost (rent + fare).`,
+    title,
+    description,
+    alternates: { canonical: `/pg-near/${slug}` },
+    openGraph: { title, description, url: `/pg-near/${slug}` },
   };
 }
 

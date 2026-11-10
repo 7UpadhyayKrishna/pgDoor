@@ -22,7 +22,14 @@ npm run db:seed
 npm run dev
 ```
 
-Dev OTP is `123456`.
+With `OTP_PROVIDER="dev"` the OTP is `OTP_BYPASS_CODE` (`123456`). The dev code is never accepted on a
+Vercel production deploy (`VERCEL_ENV=production`).
+
+### Production OTP (MSG91)
+
+Set `OTP_PROVIDER="msg91"`, `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID` (a DLT-approved OTP template with an
+`##OTP##` variable) and optionally `MSG91_SENDER_ID`. Do not set `OTP_BYPASS_CODE` in production.
+If no provider is configured in production, OTP login returns 503 and password login still works.
 
 | Role | Phone |
 | --- | --- |

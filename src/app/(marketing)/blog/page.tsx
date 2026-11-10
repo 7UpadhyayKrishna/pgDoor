@@ -1,25 +1,33 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { StaticPage, StaticSection } from "@/components/static-page";
 
-const posts = [
-  { slug: "best-pgs-in-gurgaon", title: "Best PGs in Gurgaon" },
-  { slug: "pg-vs-flat", title: "PG vs flat" },
-  { slug: "avoid-pg-scams", title: "How to avoid PG scams" },
-];
+export const metadata: Metadata = {
+  title: "Guides",
+  description: "Guides for finding a PG in Gurgaon and NCR.",
+  robots: { index: false, follow: true },
+};
 
 export default function BlogPage() {
   return (
-    <div className="container-pg py-16">
-      <h1 className="text-3xl font-bold">Blog</h1>
-      <p className="mt-2 text-muted-foreground">Content → search traffic → listings → leads.</p>
-      <ul className="mt-6 space-y-3">
-        {posts.map((post) => (
-          <li key={post.slug}>
-            <Link href="/pgs/gurgaon" className="font-medium hover:text-primary">
-              {post.title}
+    <StaticPage
+      title="Guides"
+      intro="We're writing guides on choosing a PG, commuting in Gurgaon and avoiding rental scams. They'll appear here soon."
+    >
+      <StaticSection title="Meanwhile">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <Link href="/pgs/gurgaon" className="font-medium text-primary hover:underline">
+              Browse PGs in Gurgaon
             </Link>
           </li>
-        ))}
-      </ul>
-    </div>
+          <li>
+            <Link href="/help" className="font-medium text-primary hover:underline">
+              Read the help center
+            </Link>
+          </li>
+        </ul>
+      </StaticSection>
+    </StaticPage>
   );
 }

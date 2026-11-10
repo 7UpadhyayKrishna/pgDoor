@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const REASONS = [
@@ -13,8 +14,11 @@ const REASONS = [
   ["OTHER", "Other"],
 ] as const;
 
+type Reason = (typeof REASONS)[number][0];
+
 export function ReportListing({ propertyId }: { propertyId: string }) {
-  const [reason, setReason] = useState<(typeof REASONS)[number][0]>("WRONG_PRICE");
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<Reason | "">("");
   const [details, setDetails] = useState("");
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
@@ -22,6 +26,10 @@ export function ReportListing({ propertyId }: { propertyId: string }) {
 
   async function submit() {
     setError("");
+    if (!reason) {
+      setError("Pick what's wrong with this listing.");
+      return;
+    }
     if (reason === "OTHER" && details.trim().length < 10) {
       setError("Please describe the issue (at least 10 characters).");
       return;
@@ -49,23 +57,41 @@ export function ReportListing({ propertyId }: { propertyId: string }) {
     return <p className="text-sm text-muted-foreground">Thanks. We’ll review this listing.</p>;
   }
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex min-h-11 items-center gap-1.5 text-sm text-muted-foreground hover:text-ink hover:underline"
+      >
+        <Flag className="h-4 w-4" aria-hidden />
+        Report this PG
+      </button>
+    );
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="max-w-xl space-y-3 rounded-[18px] bg-white p-4 shadow-card">
+      <p className="font-semibold text-ink">Report this PG</p>
+      <div>
+        <label className="text-sm font-medium text-ink" htmlFor="report-reason">
+          What&apos;s wrong?
+        </label>
         <select
-          className="h-10 rounded-xl border px-3 text-sm"
+          id="report-reason"
+          className="mt-1 h-11 w-full rounded-xl border border-input bg-white px-3 text-sm"
           value={reason}
-          onChange={(e) => setReason(e.target.value as typeof reason)}
+          onChange={(e) => setReason(e.target.value as Reason)}
         >
+          <option value="" disabled>
+            Choose a reason
+          </option>
           {REASONS.map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
         </select>
-        <Button type="button" variant="outline" size="sm" onClick={submit} disabled={loading}>
-          Report this PG
-        </Button>
       </div>
       <div>
         <label className="text-sm font-medium text-ink" htmlFor="report-details">
@@ -73,7 +99,7 @@ export function ReportListing({ propertyId }: { propertyId: string }) {
         </label>
         <textarea
           id="report-details"
-          className="mt-1 min-h-24 w-full max-w-xl rounded-xl border px-3 py-2 text-sm"
+          className="mt-1 min-h-24 w-full rounded-xl border border-input px-3 py-2 text-sm"
           placeholder="What seems wrong with this listing?"
           value={details}
           onChange={(e) => setDetails(e.target.value)}
@@ -81,6 +107,14 @@ export function ReportListing({ propertyId }: { propertyId: string }) {
         />
       </div>
       {error ? <p className="text-sm text-error">{error}</p> : null}
+      <div className="flex gap-2">
+        <Button type="button" onClick={submit} disabled={loading}>
+          Send report
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 }

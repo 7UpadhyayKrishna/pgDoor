@@ -44,7 +44,7 @@ export async function createEnquiry(
 ) {
   const property = await prisma.property.findUnique({
     where: { id: input.propertyId },
-    include: { owner: true },
+    include: { owner: { include: { user: { select: { name: true, phone: true } } } } },
   });
   if (!property || property.status !== "PUBLISHED") {
     throw new HttpError(404, "This PG is not available");
@@ -100,7 +100,13 @@ export async function createEnquiry(
     intentScore,
   });
 
-  return lead;
+  // Owner numbers stay hidden until the tenant has sent an OTP-verified enquiry.
+  const ownerPhone = property.contactPhone || property.owner.user.phone;
+  const ownerContact = phoneVerified && ownerPhone
+    ? { name: property.contactName || property.owner.user.name || null, phone: ownerPhone }
+    : null;
+
+  return { ...lead, ownerContact };
 }
 
 async function assertLeadParticipant(leadId: string, userId: string, ownerProfileId?: string | null) {

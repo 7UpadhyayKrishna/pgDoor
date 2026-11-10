@@ -1,49 +1,34 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { LAUNCH_DATE_LABEL } from "@/lib/launch";
+import { getCachedCityInventory, type CityInventory } from "@/modules/locations";
 
-const columns = [
-  {
-    title: "pgDoor",
-    links: [
-      { href: "/pgs", label: "Find PGs" },
-      { href: "/owners/register", label: "List Your PG" },
-      { href: "/pgs/gurgaon", label: "PGs by City" },
-      { href: "/about", label: "About Us" },
-      { href: "/contact", label: "Contact" },
-      { href: "/help", label: "Help Center" },
-    ],
-  },
-  {
-    title: "Popular Cities",
-    links: [
-      { href: "/pgs/gurgaon", label: "Gurgaon" },
-      { href: "/pgs/noida", label: "Noida" },
-      { href: "/pgs/greater-noida", label: "Greater Noida" },
-      { href: "/pgs/delhi", label: "Delhi" },
-    ],
-  },
+type FooterLink = { href?: string; label: string };
+
+const columns: { title: string; links: FooterLink[] }[] = [
   {
     title: "For Owners",
     links: [
-      { href: "/owners/register", label: "List Property" },
-      { href: "/login", label: "Owner Login" },
-      { href: "/owners/dashboard", label: "Owner Dashboard" },
+      { href: "/owners/register", label: "List your PG free" },
+      { href: "/login?next=/owners/dashboard", label: "Owner login" },
+      { href: "/owners/dashboard", label: "Owner dashboard" },
       { href: "/owners#pricing", label: "Pricing" },
     ],
   },
   {
     title: "Company",
     links: [
-      { href: "/about", label: "About Us" },
+      { href: "/about", label: "About us" },
+      { href: "/contact", label: "Contact" },
+      { href: "/help", label: "Help center" },
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
-      { href: "/help", label: "Refund Policy" },
+      { href: "/refund-policy", label: "Refund policy" },
     ],
   },
 ];
 
-const prelaunchColumns = [
+const prelaunchColumns: { title: string; links: FooterLink[] }[] = [
   {
     title: "For Owners",
     links: [
@@ -62,17 +47,34 @@ const prelaunchColumns = [
   },
 ];
 
-export function SiteFooter({ prelaunch }: { prelaunch: boolean }) {
-  const visibleColumns = prelaunch ? prelaunchColumns : columns.slice(1);
+function cityLinks(cities: CityInventory[]): FooterLink[] {
+  return cities.map((city) =>
+    city.count > 0
+      ? { href: `/pgs/${city.slug}`, label: `PGs in ${city.name}` }
+      : { label: `${city.name} · coming soon` },
+  );
+}
+
+export async function SiteFooter({ prelaunch }: { prelaunch: boolean }) {
+  const cities = prelaunch ? [] : await getCachedCityInventory().catch(() => []);
+  const visibleColumns = prelaunch
+    ? prelaunchColumns
+    : [
+        {
+          title: "Find a PG",
+          links: [{ href: "/pgs", label: "Explore all PGs" }, ...cityLinks(cities)],
+        },
+        ...columns,
+      ];
   return (
-    <footer className="mt-16 border-t border-border bg-white pb-24 md:pb-8">
+    <footer className="mt-16 border-t border-border bg-white pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
       <div className="container-pg grid gap-8 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo />
           <p className="mt-3 text-sm text-muted-foreground">
             {prelaunch
-              ? `Verified PGs across Delhi NCR. Opening to tenants on ${LAUNCH_DATE_LABEL}.`
-              : "Find your next PG. Verified listings, real photos, real availability."}
+              ? `PGs across Delhi NCR, searchable by your commute. Opening to tenants on ${LAUNCH_DATE_LABEL}.`
+              : "Find your next PG by commute. Real photos, listed rent and true monthly cost."}
           </p>
         </div>
         {visibleColumns.map((col) => (
@@ -80,10 +82,14 @@ export function SiteFooter({ prelaunch }: { prelaunch: boolean }) {
             <p className="text-sm font-semibold">{col.title}</p>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               {col.links.map((link) => (
-                <li key={link.href + link.label}>
-                  <Link href={link.href} className="hover:text-ink">
-                    {link.label}
-                  </Link>
+                <li key={(link.href ?? "") + link.label}>
+                  {link.href ? (
+                    <Link href={link.href} className="inline-block py-1 hover:text-ink">
+                      {link.label}
+                    </Link>
+                  ) : (
+                    <span className="inline-block py-1">{link.label}</span>
+                  )}
                 </li>
               ))}
             </ul>

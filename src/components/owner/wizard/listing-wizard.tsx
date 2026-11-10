@@ -172,7 +172,26 @@ export function ListingWizard(props: Props) {
           <span>
             Step {step + 1} of {STEPS.length}
           </span>
-          {!editing ? <span>Saved on this device</span> : null}
+          {!editing ? (
+            <span className="flex items-center gap-3">
+              <span>Saved on this device</span>
+              {step > 0 || draft.name ? (
+                <button
+                  type="button"
+                  className="font-semibold text-primary hover:underline"
+                  onClick={() => {
+                    if (window.confirm("Clear this draft and start a new listing from step 1?")) {
+                      clear();
+                      setErrors({});
+                      setSubmitError("");
+                    }
+                  }}
+                >
+                  Start over
+                </button>
+              ) : null}
+            </span>
+          ) : null}
         </div>
         <div className="mt-2 flex gap-1">
           {STEPS.map((s, i) => (

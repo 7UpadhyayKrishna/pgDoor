@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
 import { fetchNearbyPlaces, type NearbyPlace } from "@/lib/places";
+import { normalizeQuery, scoreAreaMatch } from "@/modules/locations/score";
 
 export async function listCities() {
   return prisma.city.findMany({
@@ -27,6 +28,41 @@ export const getCachedCityOptions = unstable_cache(
   { revalidate: 300 },
 );
 
+export type CityInventory = {
+  name: string;
+  slug: string;
+  count: number;
+  /** A real listing photo from this city, so tiles never show another city's landmark. */
+  photo: string | null;
+};
+
+async function loadCityInventory(): Promise<CityInventory[]> {
+  const [cities, counts] = await Promise.all([
+    prisma.city.findMany({ where: { isActive: true }, select: { id: true, name: true, slug: true } }),
+    prisma.property.groupBy({ by: ["cityId"], where: { status: "PUBLISHED" }, _count: true }),
+  ]);
+  const countByCity = new Map(counts.map((row) => [row.cityId, row._count]));
+  const rows = await Promise.all(
+    cities.map(async (city) => {
+      const count = countByCity.get(city.id) ?? 0;
+      const sample = count
+        ? await prisma.photo.findFirst({
+            where: { property: { cityId: city.id, status: "PUBLISHED" } },
+            orderBy: [{ property: { featured: "desc" } }, { sortOrder: "asc" }],
+            select: { url: true },
+          })
+        : null;
+      return { name: city.name, slug: city.slug, count, photo: sample?.url ?? null };
+    }),
+  );
+  return rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/** Cities with their live PG count (5 min cache) for homepage tiles and the footer. */
+export const getCachedCityInventory = unstable_cache(loadCityInventory, ["city-inventory"], {
+  revalidate: 300,
+});
+
 export async function getCityBySlug(slug: string) {
   return prisma.city.findUnique({
     where: { slug },
@@ -51,23 +87,7 @@ export async function listLandmarks(cityId?: string) {
   });
 }
 
-function normalizeQuery(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-/** Higher is better: exact 100, starts-with 80, word-prefix 60, contains 40. */
-export function scoreAreaMatch(query: string, areaName: string) {
-  const q = normalizeQuery(query);
-  if (!q) return 0;
-  const name = normalizeQuery(areaName);
-  if (!name) return 0;
-  if (name === q) return 100;
-  if (name.startsWith(q)) return 80;
-  const words = name.split(" ");
-  if (words.some((w) => w.startsWith(q))) return 60;
-  if (name.includes(q)) return 40;
-  return 0;
-}
+export { scoreAreaMatch };
 
 export type AreaSuggestion = {
   id: string;

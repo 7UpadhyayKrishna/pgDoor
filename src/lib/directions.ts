@@ -16,6 +16,24 @@ const MODE_TEXT: Record<TravelModeName, string> = {
   bicycling: "by bike",
 };
 
+const PRODUCT_MODE_TEXT: Record<string, string> = {
+  walk: "walking",
+  cycle: "by bike",
+  metro: "by metro",
+  rapid_metro: "by Rapid Metro",
+  bus: "by bus",
+  auto: "by auto",
+  shared_auto: "by shared auto",
+  rapido: "by Rapido",
+  cab: "by cab",
+  own_vehicle: "by own vehicle",
+};
+
+/** "by metro", "by bus"… — keeps the mode the tenant picked instead of collapsing to "by transit". */
+export function modeText(mode?: string) {
+  return (mode && PRODUCT_MODE_TEXT[mode]) || MODE_TEXT[asMode(mode)];
+}
+
 function asMode(mode?: string): TravelModeName {
   if (mode === "walk") return "walking";
   if (mode === "cycle" || mode === "rapido" || mode === "bicycling") return "bicycling";
@@ -37,7 +55,7 @@ export function distanceLine(input: {
   if (input.distanceKm == null) return null;
   const distance = formatDistanceKm(input.distanceKm);
   if (input.minutes == null) return distance;
-  return `${distance} · ${input.minutes} min ${MODE_TEXT[asMode(input.mode)]}`;
+  return `${distance} · ${input.minutes} min ${modeText(input.mode)}`;
 }
 
 export function googleDirectionsUrl(

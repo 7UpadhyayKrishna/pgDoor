@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Building2, CalendarCheck, KeyRound, LayoutDashboard, LogOut, MessageSquare } from "lucide-react";
+import { Building2, CalendarCheck, KeyRound, LayoutDashboard, MessageSquare } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { isPrelaunchForViewer } from "@/lib/launch-server";
 
 const links = [
@@ -28,20 +28,10 @@ export default async function OwnerLayout({
             <span className="hidden sm:inline text-muted-foreground">
               {user?.name ?? user?.phone}
             </span>
-            <form
-              action={async () => {
-                "use server";
-                const { logout } = await import("@/modules/auth");
-                const { redirect } = await import("next/navigation");
-                await logout();
-                redirect("/");
-              }}
-            >
-              <Button type="submit" variant="ghost" size="sm">
-                <LogOut className="h-4 w-4" />
-                Logout
-              </Button>
-            </form>
+            <Link href="/" className="hidden text-muted-foreground hover:text-ink sm:inline">
+              View site
+            </Link>
+            <LogoutButton variant="ghost" size="sm" showIcon />
           </div>
         </div>
       </header>

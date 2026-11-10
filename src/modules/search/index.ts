@@ -8,12 +8,13 @@ import {
   VerificationLevel,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { haversineKm, slugify } from "@/lib/utils";
+import { haversineKm, listingSlug } from "@/lib/utils";
 import { generateFromCounts, type RoomSpec } from "@/modules/inventory";
 import { HttpError } from "@/lib/rbac";
 import { isAllowedPhotoUrl } from "@/lib/storage";
 import { SEARCH_PAGE_SIZE } from "@/lib/constants";
 import { matchAreasForQuery } from "@/modules/locations";
+import { propertyTextWhere, scorePropertyForQuery } from "@/modules/search/text-query";
 import {
   estimateRadiusKm,
   parseBounds,
@@ -111,6 +112,15 @@ const cardInclude = {
     },
   },
 } satisfies Prisma.PropertyInclude;
+
+/** With a sharing filter the card leads with that room's rent, not the cheapest room overall. */
+function cardIncludeFor(sharing?: SearchFilters["sharing"]) {
+  if (!sharing) return cardInclude;
+  return {
+    ...cardInclude,
+    roomTypes: { ...cardInclude.roomTypes, where: { sharingType: sharing as RoomSharingType } },
+  } satisfies Prisma.PropertyInclude;
+}
 
 /** Upper bound on pins sent to the explore map; the list itself stays paginated. */
 const MAP_PIN_LIMIT = 2000;
@@ -233,7 +243,7 @@ export function toPublicCard(
     latitude: number;
     longitude: number;
     minRent: number;
-    minDeposit: number;
+    minDeposit: number | null;
     availableBeds: number;
     totalBeds: number;
     foodIncluded: boolean;
@@ -249,7 +259,7 @@ export function toPublicCard(
     roomTypes: {
       sharingType: RoomSharingType;
       rent: number;
-      deposit: number;
+      deposit: number | null;
       availableBeds: number;
       totalBeds: number;
     }[];
@@ -345,12 +355,8 @@ function applyNonGeoFilters(
     where.pgType = filters.pgType as PgType;
   }
   if (filters.sharing) {
-    where.roomTypes = {
-      some: {
-        sharingType: filters.sharing as RoomSharingType,
-        availableBeds: { gt: 0 },
-      },
-    };
+    // Free beds are a separate filter ("availability"); full singles are still singles.
+    where.roomTypes = { some: { sharingType: filters.sharing as RoomSharingType } };
   }
   if (filters.amenities?.length) {
     where.AND = (where.AND as Prisma.PropertyWhereInput[] | undefined) ?? [];
@@ -387,6 +393,7 @@ function applyNonGeoFilters(
 
 function sortByRelevance(
   a: {
+    name: string;
     areaId: string;
     featured: boolean;
     verificationLevel: VerificationLevel;
@@ -394,10 +401,11 @@ function sortByRelevance(
     ratingAvg: number;
   },
   b: typeof a,
+  q: string,
   areaScores: Map<string, number>,
 ) {
-  const scoreA = areaScores.get(a.areaId) ?? 0;
-  const scoreB = areaScores.get(b.areaId) ?? 0;
+  const scoreA = scorePropertyForQuery(q, a, areaScores);
+  const scoreB = scorePropertyForQuery(q, b, areaScores);
   if (scoreB !== scoreA) return scoreB - scoreA;
   if (Number(b.featured) !== Number(a.featured)) {
     return Number(b.featured) - Number(a.featured);
@@ -413,6 +421,7 @@ function sortByRelevance(
 
 export async function searchProperties(filters: SearchFilters) {
   const page = filters.page ?? 1;
+  const rowInclude = cardIncludeFor(filters.sharing);
   const where: Prisma.PropertyWhereInput = {
     status: PropertyStatus.PUBLISHED,
   };
@@ -456,23 +465,9 @@ export async function searchProperties(filters: SearchFilters) {
 
   if (q && !useGeo) {
     const matched = await matchAreasForQuery(q);
-    if (matched.length === 0) {
-      return {
-        total: 0,
-        page,
-        pageSize: SEARCH_PAGE_SIZE,
-        results: [],
-        pins: [] as MapPin[],
-        destination: null as null | {
-          lat: number;
-          lng: number;
-          label?: string;
-          mode: TravelMode;
-        },
-      };
-    }
     areaScores = new Map(matched.map((a) => [a.id, a.score]));
-    where.areaId = { in: matched.map((a) => a.id) };
+    where.AND = [propertyTextWhere(q, matched.map((a) => a.id))];
+    if (filters.city) where.city = { slug: filters.city };
   } else if (!useGeo) {
     if (filters.city) {
       where.city = { slug: filters.city };
@@ -521,10 +516,10 @@ export async function searchProperties(filters: SearchFilters) {
   if (useAreaRelevance) {
     const rows = await prisma.property.findMany({
       where,
-      include: cardInclude,
+      include: rowInclude,
     });
 
-    rows.sort((a, b) => sortByRelevance(a, b, areaScores));
+    rows.sort((a, b) => sortByRelevance(a, b, q!, areaScores));
 
     const total = rows.length;
     const pageRows = rows.slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
@@ -649,7 +644,7 @@ export async function searchProperties(filters: SearchFilters) {
         ? []
         : await prisma.property.findMany({
             where: { id: { in: pageIds } },
-            include: cardInclude,
+            include: rowInclude,
           });
     const fullById = new Map(fullRows.map((row) => [row.id, row]));
 
@@ -675,7 +670,7 @@ export async function searchProperties(filters: SearchFilters) {
   if (bounds) {
     let rows = await prisma.property.findMany({
       where,
-      include: cardInclude,
+      include: rowInclude,
       orderBy,
     });
     rows = rows.filter(
@@ -701,7 +696,7 @@ export async function searchProperties(filters: SearchFilters) {
     prisma.property.count({ where }),
     prisma.property.findMany({
       where,
-      include: cardInclude,
+      include: rowInclude,
       orderBy,
       skip: (page - 1) * SEARCH_PAGE_SIZE,
       take: SEARCH_PAGE_SIZE,
@@ -742,6 +737,51 @@ export async function getPublishedBySlug(slug: string) {
   return property;
 }
 
+/** Current slug for a renamed listing, so old links can 301 instead of 404. */
+export async function resolveSlugRedirect(slug: string) {
+  const row = await prisma.propertySlugRedirect.findUnique({
+    where: { slug },
+    select: { property: { select: { slug: true, status: true } } },
+  });
+  return row?.property.status === "PUBLISHED" ? row.property.slug : null;
+}
+
+/** PGs with free beds near a listing: same area first, then the rest of the city. */
+export async function getSimilarOpen(
+  property: { id: string; areaId: string; cityId: string; pgType: PgType },
+  limit = 4,
+) {
+  const base = {
+    status: PropertyStatus.PUBLISHED,
+    availableBeds: { gt: 0 },
+    id: { not: property.id },
+  } satisfies Prisma.PropertyWhereInput;
+  const orderBy: Prisma.PropertyOrderByWithRelationInput[] = [
+    { availabilityConfirmedAt: "desc" },
+    { minRent: "asc" },
+  ];
+  const sameArea = await prisma.property.findMany({
+    where: { ...base, areaId: property.areaId },
+    include: cardInclude,
+    orderBy,
+    take: limit,
+  });
+  const rest =
+    sameArea.length >= limit
+      ? []
+      : await prisma.property.findMany({
+          where: {
+            ...base,
+            cityId: property.cityId,
+            id: { notIn: [property.id, ...sameArea.map((p) => p.id)] },
+          },
+          include: cardInclude,
+          orderBy,
+          take: limit - sameArea.length,
+        });
+  return [...sameArea, ...rest].map((row) => toPublicCard(row));
+}
+
 export async function getFeatured(limit = 8) {
   const rows = await prisma.property.findMany({
     where: { status: "PUBLISHED" },
@@ -759,10 +799,13 @@ export const getCachedFeatured = unstable_cache(
 );
 
 export async function uniqueSlug(name: string, areaName: string, cityName: string) {
-  const base = slugify(`${name} ${areaName} ${cityName}`);
+  const base = listingSlug(name, areaName, cityName);
   let slug = base;
   let i = 2;
-  while (await prisma.property.findUnique({ where: { slug } })) {
+  while (
+    (await prisma.property.findUnique({ where: { slug } })) ||
+    (await prisma.propertySlugRedirect.findUnique({ where: { slug } }))
+  ) {
     slug = `${base}-${i}`;
     i += 1;
   }
@@ -814,7 +857,7 @@ export const createPropertySchema = z.object({
       z.object({
         sharingType: z.enum(["SINGLE", "DOUBLE", "TRIPLE", "FOUR"]),
         rent: z.number().int().positive("Rent must be more than 0"),
-        deposit: z.number().int().nonnegative(),
+        deposit: z.number().int().nonnegative().nullable().default(null),
         roomCount: z.number().int().positive("Add at least 1 room"),
         availableBeds: z.number().int().nonnegative(),
       }),

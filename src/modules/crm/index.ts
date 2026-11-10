@@ -54,6 +54,30 @@ export async function createProspect(input: ProspectInput, actorId: string) {
   return prospect;
 }
 
+export const inboundContactSchema = z.object({
+  name: z.string().trim().min(2, "Enter your name").max(120),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"),
+  pgName: optionalText(120),
+  message: z.string().trim().min(5, "Tell us a little more").max(2000),
+});
+
+/** "Contact us" from a PG owner lands in the admin CRM as a new inbound prospect. */
+export async function createInboundProspect(input: z.infer<typeof inboundContactSchema>) {
+  return prisma.ownerProspect.create({
+    data: {
+      name: input.name,
+      phone: normalizePhone(input.phone),
+      pgName: input.pgName ?? null,
+      source: "INBOUND",
+      activities: { create: { type: "NOTE", body: `Contact form: ${input.message}` } },
+    },
+    select: { id: true },
+  });
+}
+
 export async function updateProspect(id: string, input: ProspectInput) {
   return prisma.ownerProspect.update({ where: { id }, data: prospectData(input) });
 }

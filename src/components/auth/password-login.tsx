@@ -16,6 +16,10 @@ export function PasswordLogin({ redirectTo }: { redirectTo?: string }) {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      setError("Enter a valid 10-digit mobile number");
+      return;
+    }
     setLoading(true);
     setError("");
     const res = await fetch("/api/auth/password/login", {
@@ -44,10 +48,13 @@ export function PasswordLogin({ redirectTo }: { redirectTo?: string }) {
         <Input
           id="pwd-phone"
           className="mt-2"
+          type="tel"
+          inputMode="numeric"
+          maxLength={10}
           placeholder="10-digit mobile"
           autoComplete="username"
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
         />
       </div>
       <div>

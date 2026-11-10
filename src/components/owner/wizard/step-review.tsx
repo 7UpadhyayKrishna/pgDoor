@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Pencil } from "lucide-react";
 import { MEAL_LABEL, PG_TYPE_LABEL, PREFERRED_TENANTS_LABEL, SHARING_LABEL } from "@/lib/constants";
-import { formatGateTime, formatInr } from "@/lib/format";
+import { formatDeposit, formatGateTime, formatInr } from "@/lib/format";
 import { completeness, electricityNote, enabledRooms, fullAddress, toInt } from "./draft";
 import { Field, textInputClass } from "./fields";
 import type { StepProps } from "./step-basics";
@@ -91,7 +91,7 @@ export function StepReview({
         {enabledRooms(draft).map((room) => (
           <p key={room.sharingType}>
             <span className="font-medium text-ink">{SHARING_LABEL[room.sharingType]}</span>:{" "}
-            {formatInr(toInt(room.rent) ?? 0)}/bed · deposit {formatInr(toInt(room.deposit) ?? 0)} ·{" "}
+            {formatInr(toInt(room.rent) ?? 0)}/bed · deposit {formatDeposit(toInt(room.deposit))} ·{" "}
             {toInt(room.availableBeds) ?? 0} beds free
           </p>
         ))}

@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Crosshair, MapPin, X } from "lucide-react";
 import { DestinationSearch } from "@/components/search/destination-search";
 import {
+  clearPreferredLocation,
   savePreferredLocation,
   usePreferredLocation,
   type SavedLocation,
@@ -49,7 +50,8 @@ export function PreferredLocation() {
     for (const key of ["destLat", "destLng", "destLabel", "commuteMax", "page", "bounds"]) {
       next.delete(key);
     }
-    if (next.get("sort") === "commute") next.delete("sort");
+    if (next.get("sort") === "commute" || next.get("sort") === "true_cost") next.delete("sort");
+    clearPreferredLocation();
     const qs = next.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
@@ -119,14 +121,24 @@ export function PreferredLocation() {
           <>
             <span className="text-muted-foreground">See distance and directions from:</span>
             {saved ? (
-              <button
-                type="button"
-                onClick={() => apply(saved)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 font-medium text-ink hover:bg-primary-soft/70"
-              >
-                <MapPin className="h-4 w-4 text-primary" />
-                {saved.label}
-              </button>
+              <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-white px-3 py-1.5 text-ink">
+                <button
+                  type="button"
+                  onClick={() => apply(saved)}
+                  className="inline-flex items-center gap-1.5 font-medium hover:underline"
+                >
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  Use last destination: {saved.label}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Forget last destination"
+                  onClick={clearPreferredLocation}
+                  className="ml-1 flex h-5 w-5 items-center justify-center rounded-full hover:bg-canvas"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
             ) : null}
             <button
               type="button"

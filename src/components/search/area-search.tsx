@@ -124,7 +124,7 @@ export function AreaSearch({
             Where do you want to live?
           </span>
         ) : (
-          <span className="sr-only">Search by area</span>
+          <span className="sr-only">Search by area or PG name</span>
         )}
         <div className={cn("relative flex items-center", isHero && "mt-1")}>
           {!isHero ? (
@@ -146,7 +146,7 @@ export function AreaSearch({
               "w-full text-sm font-medium text-ink outline-none",
               isHero
                 ? "h-12 rounded-[20px] border-0 bg-canvas px-4"
-                : "h-10 rounded-full border border-border bg-canvas pl-9 pr-3",
+                : "h-11 rounded-full border border-border bg-canvas pl-9 pr-3",
             )}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -186,6 +186,16 @@ export function AreaSearch({
           role="listbox"
           className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-border bg-white py-1 shadow-card"
         >
+          <li role="option" aria-selected={false}>
+            <button
+              type="button"
+              className="w-full px-3 py-2.5 text-left text-sm hover:bg-canvas"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => go(buildAreaSearchHref(query))}
+            >
+              <span className="font-medium text-ink">Search PGs for “{query.trim()}”</span>
+            </button>
+          </li>
           {suggestions.map((s, index) => (
             <li key={`${s.citySlug}-${s.slug}`} role="option" aria-selected={index === activeIndex}>
               <button

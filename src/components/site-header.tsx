@@ -62,7 +62,7 @@ export function SiteHeader({ user, prelaunch }: { user: AuthUser | null; prelaun
         <AreaSearch
           variant="header"
           className="min-w-0 flex-1 max-w-xl"
-          placeholder="Search by area"
+          placeholder="Area or PG name"
         />
 
         <div className="flex shrink-0 items-center gap-2">

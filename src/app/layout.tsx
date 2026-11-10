@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { siteUrl } from "@/lib/site";
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -9,14 +10,23 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: {
     default: "pgDoor — Find your next PG.",
     template: "%s · pgDoor",
   },
   description:
-    "Verified PGs. Real photos. Real availability.",
+    "Find a PG by your daily commute. Real photos, listed rent and true monthly cost for PGs across Gurgaon and NCR.",
   manifest: "/manifest.json",
   applicationName: "pgDoor",
+  openGraph: {
+    type: "website",
+    siteName: "pgDoor",
+    locale: "en_IN",
+    title: "pgDoor — Find your next PG.",
+    description: "Find a PG by your daily commute. Real photos, listed rent and true monthly cost.",
+  },
+  twitter: { card: "summary" },
 };
 
 export const viewport: Viewport = {

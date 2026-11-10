@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { OTP_MAX_PER_WINDOW, OTP_WINDOW_MINUTES } from "@/lib/constants";
-import { generateOtpCode, hashSecret, normalizePhone, otpExpiry, sendOtp } from "@/lib/otp";
+import { generateOtpCode, hashSecret, isDevOtp, normalizePhone, otpExpiry, sendOtp } from "@/lib/otp";
 import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
@@ -9,10 +9,17 @@ import { createSession, destroySession } from "@/lib/session";
 import { markOwnerOnboarded } from "@/modules/crm";
 
 const PASSWORD_LOGIN_MAX = 5;
+
+const phoneField = z
+  .string({ error: "Enter your mobile number" })
+  .trim()
+  .refine((v) => /^(\+?91)?\d{10}$/.test(v.replace(/[\s-]/g, "")), {
+    message: "Enter a valid 10-digit mobile number",
+  });
 const PASSWORD_LOGIN_WINDOW_MS = 10 * 60 * 1000;
 
 export const passwordLoginSchema = z.object({
-  phone: z.string().min(10),
+  phone: phoneField,
   password: z.string().min(1, "Enter your password"),
 });
 
@@ -25,12 +32,12 @@ export const changePasswordSchema = z.object({
 });
 
 export const sendOtpSchema = z.object({
-  phone: z.string().min(10),
+  phone: phoneField,
   purpose: z.enum(["LOGIN", "ENQUIRY", "OWNER_REGISTER"]).default("LOGIN"),
 });
 
 export const verifyOtpSchema = z.object({
-  phone: z.string().min(10),
+  phone: phoneField,
   code: z.string().min(4).max(8),
   purpose: z.enum(["LOGIN", "ENQUIRY", "OWNER_REGISTER"]).default("LOGIN"),
   name: z.string().min(2).optional(),
@@ -57,7 +64,7 @@ export async function requestOtp(input: z.infer<typeof sendOtpSchema>) {
     },
   });
   await sendOtp(phone, code);
-  return { phone, dev: process.env.OTP_PROVIDER === "dev" };
+  return { phone, dev: isDevOtp() };
 }
 
 export async function verifyOtpAndSession(input: z.infer<typeof verifyOtpSchema>) {

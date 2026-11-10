@@ -2,10 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Navigation, Star } from "lucide-react";
+import { useState } from "react";
+import { ImageOff, Navigation, Star } from "lucide-react";
 import { SaveButton } from "@/components/listing/save-button";
 import { Badge } from "@/components/ui/badge";
-import { PG_TYPE_LABEL, SHARING_LABEL, STALE_AVAILABILITY_DAYS } from "@/lib/constants";
+import {
+  PG_TYPE_LABEL,
+  PUBLIC_VERIFIED_LEVELS,
+  SHARING_LABEL,
+  STALE_AVAILABILITY_DAYS,
+} from "@/lib/constants";
 import { toggleCompare, useCompareItems } from "@/lib/compare-store";
 import { distanceLine, googleDirectionsUrl, listingHref, type Origin } from "@/lib/directions";
 import { formatInr, formatUpdatedAt } from "@/lib/format";
@@ -46,8 +52,10 @@ export function PgCard({
   origin?: Origin | null;
   compare?: boolean;
 }) {
-  const photo = property.photos[0]?.url;
+  const [photoBroken, setPhotoBroken] = useState(false);
+  const photo = photoBroken ? undefined : property.photos[0]?.url;
   const sharing = property.roomTypes[0]?.sharingType;
+  const rent = property.roomTypes[0]?.rent ?? property.minRent;
   const full = property.availableBeds <= 0;
   const availabilityFresh = isAvailabilityFresh(property.availabilityConfirmedAt);
   const compareItems = useCompareItems();
@@ -76,13 +84,20 @@ export function PgCard({
           {photo ? (
             <Image
               src={photo}
-              alt={property.name}
+              alt={property.photos[0]?.alt || property.name}
               fill
               className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
               sizes={variant === "rail" ? "260px" : "(max-width: 768px) 100vw, 360px"}
+              quality={70}
+              onError={() => setPhotoBroken(true)}
             />
-          ) : null}
-          {property.verificationLevel !== "UNVERIFIED" ? (
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
+              <ImageOff className="h-6 w-6" aria-hidden />
+              <span className="text-xs">Photos coming soon</span>
+            </div>
+          )}
+          {PUBLIC_VERIFIED_LEVELS.includes(property.verificationLevel) ? (
             <Badge variant="verified" className="absolute left-3 top-3">
               ✓ Verified
             </Badge>
@@ -103,16 +118,18 @@ export function PgCard({
           </p>
           <PgTypeBadge pgType={property.pgType} />
           <p className="text-sm font-semibold text-ink">
-            {formatInr(property.minRent)}/month
+            {formatInr(rent)}/month
             {sharing ? ` · ${SHARING_LABEL[sharing].replace(" Sharing", "")}` : ""}
             {property.foodIncluded ? " · Food included" : ""}
           </p>
           {property.commute?.trueMonthlyCost ? (
             <p className="text-sm font-medium text-ink">
-              True cost {formatInr(property.commute.trueMonthlyCost)}
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                (rent + {formatInr(property.commute.monthlyCommute ?? 0)} commute)
+              True cost {formatInr(property.commute.trueMonthlyCost)}/month
+              <span className="block font-normal text-muted-foreground">
+                {`Rent + ${formatInr(property.commute.monthlyCommute ?? 0)} commute`}
+                {property.commute.dailyCost != null
+                  ? ` (${formatInr(property.commute.dailyCost)}/day)`
+                  : ""}
               </span>
             </p>
           ) : null}

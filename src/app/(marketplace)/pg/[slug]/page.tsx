@@ -10,20 +10,79 @@ import { SaveButton } from "@/components/listing/save-button";
 import { CommuteTrial } from "@/components/listing/commute-trial";
 import { ScoreBreakdown } from "@/components/listing/score-breakdown";
 import { Badge } from "@/components/ui/badge";
-import { MEAL_LABEL, PREFERRED_TENANTS_LABEL, SHARING_LABEL } from "@/lib/constants";
-import { formatGateTime, formatInr, formatUpdatedAt } from "@/lib/format";
-import { mapsEmbedUrl } from "@/lib/maps";
+import type { Metadata } from "next";
+import { cache } from "react";
+import {
+  PG_TYPE_LABEL,
+  PREFERRED_TENANTS_LABEL,
+  PUBLIC_VERIFIED_LEVELS,
+  SHARING_LABEL,
+  SHARING_ORDER,
+  formatMeals,
+} from "@/lib/constants";
+import { formatDeposit, formatGateTime, formatInr, formatUpdatedAt } from "@/lib/format";
+import { googleMapsPlaceUrl, mapsEmbedUrl } from "@/lib/maps";
 import { parseCommuteMode, ALL_DETAIL_MODES } from "@/lib/commute/modes";
 import { fillCommuteQuotes } from "@/modules/commute";
 import { nearbyForProperty } from "@/modules/pois";
 import { type Origin } from "@/lib/directions";
 import { PgTypeBadge } from "@/components/search/pg-card";
 import { getNearbyForArea } from "@/modules/locations";
-import { getPublishedBySlug, incrementView } from "@/modules/properties";
+import {
+  getPublishedBySlug,
+  getSimilarOpen,
+  incrementView,
+  resolveSlugRedirect,
+} from "@/modules/properties";
 import { ReportListing } from "@/components/listing/report-listing";
-import { notFound } from "next/navigation";
+import { PgCard } from "@/components/search/pg-card";
+import { notFound, permanentRedirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+const loadProperty = cache((slug: string) => getPublishedBySlug(slug));
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const property = await loadProperty(slug);
+  if (!property) return { robots: { index: false } };
+  const place = `${property.area.name}, ${property.city.name}`;
+  const rent = property.minRent > 0 ? ` · from ${formatInr(property.minRent)}` : "";
+  const title = `${property.name}, ${property.area.name}${rent}`;
+  const description = [
+    `${PG_TYPE_LABEL[property.pgType] ?? "PG"} in ${place}`,
+    property.minRent > 0 ? `rent from ${formatInr(property.minRent)}/month` : null,
+    property.foodIncluded ? "food included" : null,
+    `${property.amenities.length} amenities, house rules and commute times on pgDoor`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const image = property.photos[0]?.url;
+  const url = `/pg/${property.slug}`;
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url,
+      siteName: "pgDoor",
+      images: image ? [{ url: image, alt: property.name }] : undefined,
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: image ? [image] : undefined,
+    },
+  };
+}
 
 function parseOrigin(query: Record<string, string | string[] | undefined>): Origin | null {
   const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -44,14 +103,19 @@ export default async function PgDetailPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const property = await getPublishedBySlug(slug);
-  if (!property) notFound();
+  const property = await loadProperty(slug);
+  if (!property) {
+    const current = await resolveSlugRedirect(slug);
+    if (current) permanentRedirect(`/pg/${current}`);
+    notFound();
+  }
   // View counts are best-effort; never let them surface as page errors.
   void incrementView(slug).catch(() => undefined);
 
   const origin = parseOrigin(query);
   const productMode = parseCommuteMode(origin?.mode);
-  const [nearby, essentials, commuteProfile] = await Promise.all([
+  const full = property.availableBeds <= 0;
+  const [nearby, essentials, commuteProfile, similar] = await Promise.all([
     getNearbyForArea(property.areaId),
     nearbyForProperty(property.id, property.latitude, property.longitude),
     origin
@@ -66,11 +130,17 @@ export default async function PgDetailPage({
           ALL_DETAIL_MODES,
         ).then((map) => map.get(property.id) ?? null)
       : Promise.resolve(null),
+    full ? getSimilarOpen(property).catch(() => []) : Promise.resolve([]),
   ]);
 
+  // roomTypes come cheapest-first, so this is the room whose rent the hero shows.
   const primaryRoom = property.roomTypes[0];
+  const heroDeposit = primaryRoom ? primaryRoom.deposit : property.minDeposit;
+  const roomsInOrder = [...property.roomTypes].sort(
+    (a, b) => SHARING_ORDER.indexOf(a.sharingType) - SHARING_ORDER.indexOf(b.sharingType),
+  );
+  const publiclyVerified = PUBLIC_VERIFIED_LEVELS.includes(property.verificationLevel);
   const scores = property.reviews[0]?.scores;
-  const full = property.availableBeds <= 0;
   const foodType = [property.vegetarianFood && "Veg", property.nonVegetarianFood && "Non-veg"]
     .filter(Boolean)
     .join(" & ");
@@ -159,7 +229,7 @@ export default async function PgDetailPage({
               {property.ratingAvg.toFixed(1)} · {property.reviewCount} reviews
             </p>
           ) : null}
-          {property.verificationLevel !== "UNVERIFIED" ? (
+          {publiclyVerified ? (
             <Badge variant="verified" className="mt-3">
               ✓ Verified by pgDoor
             </Badge>
@@ -176,7 +246,15 @@ export default async function PgDetailPage({
           <dl className="mt-4 space-y-2 text-sm text-ink">
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Security deposit</dt>
-              <dd className="shrink-0 font-medium">{formatInr(property.minDeposit)}</dd>
+              <dd className="shrink-0 font-medium">
+                {formatDeposit(heroDeposit)}
+                {primaryRoom && property.roomTypes.length > 1 && heroDeposit != null ? (
+                  <span className="font-normal text-muted-foreground">
+                    {" "}
+                    ({SHARING_LABEL[primaryRoom.sharingType].replace(" Sharing", "").toLowerCase()})
+                  </span>
+                ) : null}
+              </dd>
             </div>
             {property.maintenanceCharge != null ? (
               <div className="flex justify-between gap-4">
@@ -189,7 +267,7 @@ export default async function PgDetailPage({
               <dd className="min-w-0 text-right font-medium">
                 {property.foodIncluded
                   ? [
-                      property.mealsProvided.map((meal) => MEAL_LABEL[meal] ?? meal).join(", ") || "Included",
+                      formatMeals(property.mealsProvided) || "Included",
                       foodType,
                     ]
                       .filter(Boolean)
@@ -241,7 +319,7 @@ export default async function PgDetailPage({
             <section className="mt-8">
               <h2 className="text-lg font-semibold">Rooms and rent</h2>
               <ul className="mt-3 space-y-2">
-                {property.roomTypes.map((rt) => (
+                {roomsInOrder.map((rt) => (
                   <li
                     key={rt.id}
                     className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-sm shadow-card"
@@ -249,7 +327,7 @@ export default async function PgDetailPage({
                     <div className="min-w-0">
                       <p className="font-semibold text-ink">{SHARING_LABEL[rt.sharingType]}</p>
                       <p className="text-muted-foreground">
-                        Deposit {formatInr(rt.deposit)} ·{" "}
+                        Deposit {formatDeposit(rt.deposit)} ·{" "}
                         {rt.availableBeds > 0 ? `${rt.availableBeds} beds available` : "Full"}
                       </p>
                     </div>
@@ -301,12 +379,26 @@ export default async function PgDetailPage({
 
           <section className="mt-8">
             <h2 className="text-lg font-semibold">Where you&apos;ll live</h2>
-            <div className="mt-3 overflow-hidden rounded-[18px] border">
+            <div className="mt-3 overflow-hidden rounded-[18px] border bg-canvas">
               <iframe
-                title="Map"
+                title={`Map showing ${property.name}`}
                 src={mapsEmbedUrl(property.latitude, property.longitude)}
                 className="h-48 w-full sm:h-56"
+                loading="lazy"
               />
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-4 py-3 text-sm">
+                <p className="min-w-0 text-muted-foreground">
+                  {property.address || `${property.area.name}, ${property.city.name}`}
+                </p>
+                <a
+                  href={googleMapsPlaceUrl(property.latitude, property.longitude)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 font-medium text-primary hover:underline"
+                >
+                  Open in Google Maps
+                </a>
+              </div>
             </div>
           </section>
 
@@ -344,6 +436,20 @@ export default async function PgDetailPage({
             </section>
           ) : null}
 
+          {similar.length ? (
+            <section className="mt-8">
+              <h2 className="text-lg font-semibold">Similar PGs with open beds</h2>
+              <p className="text-sm text-muted-foreground">
+                {property.name} is full right now. These nearby PGs have beds free.
+              </p>
+              <div className="-mx-1 mt-3 flex gap-3 overflow-x-auto px-1 pb-2">
+                {similar.map((pg) => (
+                  <PgCard key={pg.id} property={pg} variant="rail" origin={origin} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <div className="mt-8">
             <ReportListing propertyId={property.id} />
           </div>
@@ -351,7 +457,9 @@ export default async function PgDetailPage({
         <StickyCta
           propertyId={property.id}
           propertyName={property.name}
+          slug={property.slug}
           minRent={property.minRent}
+          full={full}
         />
       </div>
     </div>

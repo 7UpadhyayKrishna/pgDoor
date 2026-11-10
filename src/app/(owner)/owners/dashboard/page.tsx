@@ -13,7 +13,17 @@ export const dynamic = "force-dynamic";
 export default async function OwnerDashboardPage() {
   const user = await requireOwnerPage("/owners/dashboard");
   if (!user.ownerProfileId) {
-    return <p>Create an owner profile first.</p>;
+    return (
+      <div className="rounded-[24px] bg-white p-6 text-center shadow-card sm:p-10">
+        <h1 className="text-2xl font-bold text-ink">Set up your owner profile</h1>
+        <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+          List your first PG to create your owner profile. It&apos;s free and takes about 5 minutes.
+        </p>
+        <Button asChild className="mt-5">
+          <Link href="/owners/register">List your PG</Link>
+        </Button>
+      </div>
+    );
   }
   const ownerId = user.ownerProfileId;
   const prelaunch = await isPrelaunchForViewer();

@@ -6,36 +6,70 @@ import { PgCard } from "@/components/search/pg-card";
 import { Button } from "@/components/ui/button";
 import { QUICK_CHIPS } from "@/lib/constants";
 import { getCachedFeatured } from "@/modules/search";
+import { getCachedCityInventory, type CityInventory } from "@/modules/locations";
+import { cn } from "@/lib/utils";
 
-const locations = [
-  {
-    name: "Gurgaon",
-    href: "/pgs/gurgaon",
-    image:
-      "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=800&q=80",
-  },
-  {
-    name: "Noida",
-    href: "/pgs/noida",
-    image:
-      "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?auto=format&fit=crop&w=800&q=80",
-  },
-  {
-    name: "Greater Noida",
-    href: "/pgs/greater-noida",
-    image:
-      "https://images.unsplash.com/photo-1486304873000-235643847519?auto=format&fit=crop&w=800&q=80",
-  },
-  {
-    name: "Delhi",
-    href: "/pgs/delhi",
-    image:
-      "https://images.unsplash.com/photo-1587474260584-136574528ed5?auto=format&fit=crop&w=800&q=80",
-  },
-];
+/** Landmark photos for cities with no listings yet; live cities use a real listing photo. */
+const CITY_FALLBACK_PHOTO: Record<string, string> = {
+  delhi: "https://images.unsplash.com/photo-1587474260584-136574528ed5?auto=format&fit=crop&w=800&q=80",
+  noida: "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?auto=format&fit=crop&w=800&q=80",
+};
+
+function CityTile({
+  city,
+  className,
+  sizes,
+}: {
+  city: CityInventory;
+  className?: string;
+  sizes: string;
+}) {
+  const live = city.count > 0;
+  const photo = city.photo ?? CITY_FALLBACK_PHOTO[city.slug] ?? null;
+  const body = (
+    <>
+      {photo ? (
+        <Image
+          src={photo}
+          alt={live ? `A PG in ${city.name}` : city.name}
+          fill
+          className={cn(
+            "object-cover transition-transform duration-300 group-hover:scale-[1.03]",
+            !live && "grayscale-[60%]",
+          )}
+          sizes={sizes}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-soft to-canvas" />
+      )}
+      <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/75 to-transparent p-4 text-white">
+        <span className="block text-lg font-semibold">{city.name}</span>
+        <span className="block text-sm text-white/85">
+          {live ? `${city.count} PGs` : "Coming soon"}
+        </span>
+      </span>
+    </>
+  );
+  if (!live) {
+    return (
+      <div aria-label={`${city.name}, coming soon`} className={cn("relative overflow-hidden", className)}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <Link href={`/pgs/${city.slug}`} className={cn("group relative overflow-hidden", className)}>
+      {body}
+    </Link>
+  );
+}
 
 export async function MarketplaceHome() {
-  const featured = await getCachedFeatured(8);
+  const [featured, cities] = await Promise.all([
+    getCachedFeatured(8),
+    getCachedCityInventory().catch(() => [] as CityInventory[]),
+  ]);
+  const tiles = cities.slice(0, 4);
 
   return (
     <div>
@@ -57,7 +91,7 @@ export async function MarketplaceHome() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="rounded-full bg-white px-4 py-2 text-sm font-medium text-ink ring-1 ring-border hover:bg-primary-soft hover:text-ink hover:ring-primary"
+                    className="inline-flex min-h-11 items-center rounded-full bg-white px-4 text-sm font-medium text-ink ring-1 ring-border hover:bg-primary-soft hover:text-ink hover:ring-primary"
                   >
                     {item.label}
                   </Link>
@@ -65,23 +99,13 @@ export async function MarketplaceHome() {
               </div>
             </div>
             <div className="hidden h-[420px] grid-cols-2 grid-rows-3 gap-3 lg:grid">
-              {locations.map((loc, i) => (
-                <Link
-                  key={loc.href}
-                  href={loc.href}
-                  className={`group relative overflow-hidden rounded-[24px] ${i === 0 ? "row-span-3" : ""}`}
-                >
-                  <Image
-                    src={loc.image}
-                    alt={loc.name}
-                    fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                    sizes={i === 0 ? "360px" : "220px"}
-                  />
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/70 to-transparent p-4 text-lg font-semibold text-white">
-                    {loc.name}
-                  </span>
-                </Link>
+              {tiles.map((city, i) => (
+                <CityTile
+                  key={city.slug}
+                  city={city}
+                  className={cn("rounded-[24px]", i === 0 && "row-span-3")}
+                  sizes={i === 0 ? "360px" : "220px"}
+                />
               ))}
             </div>
           </div>
@@ -91,19 +115,13 @@ export async function MarketplaceHome() {
       <section className="container-pg py-10 lg:hidden">
         <h2 className="text-xl font-semibold">Popular locations</h2>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {locations.map((loc) => (
-            <Link key={loc.href} href={loc.href} className="group">
-              <div className="relative aspect-[16/10] overflow-hidden rounded-[18px]">
-                <Image
-                  src={loc.image}
-                  alt={loc.name}
-                  fill
-                  className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                  sizes="(max-width: 640px) 100vw, 50vw"
-                />
-              </div>
-              <p className="mt-2 font-semibold">{loc.name}</p>
-            </Link>
+          {tiles.map((city) => (
+            <CityTile
+              key={city.slug}
+              city={city}
+              className="block aspect-[16/10] rounded-[18px]"
+              sizes="(max-width: 640px) 100vw, 50vw"
+            />
           ))}
         </div>
       </section>
@@ -126,7 +144,7 @@ export async function MarketplaceHome() {
         <h2 className="text-xl font-semibold">Why pgDoor?</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { icon: ShieldCheck, title: "Verified PGs", body: "Properties and owners are verified." },
+            { icon: ShieldCheck, title: "Commute first", body: "See travel time and true monthly cost to your office or college." },
             { icon: Camera, title: "Real photos", body: "See the actual property before visiting." },
             { icon: CheckCircle2, title: "Fresh availability", body: "Know when availability was last updated." },
             { icon: IndianRupee, title: "Transparent pricing", body: "See rent, deposit and extra charges clearly." },
@@ -145,7 +163,7 @@ export async function MarketplaceHome() {
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {[
             { n: "01", t: "Search", d: "Find PGs by location, budget and preferences." },
-            { n: "02", t: "Compare", d: "Check rooms, pricing, amenities, reviews and availability." },
+            { n: "02", t: "Compare", d: "Check rooms, pricing, amenities, house rules and availability." },
             { n: "03", t: "Move in", d: "Talk to the owner and schedule a visit." },
           ].map((s) => (
             <div key={s.n} className="rounded-[18px] bg-white p-5 shadow-card">

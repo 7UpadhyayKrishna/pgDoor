@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { Logo } from "@/components/logo";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 const links = [
   { href: "/admin", label: "Dashboard" },
@@ -23,7 +24,13 @@ export default async function AdminLayout({
       <header className="border-b border-border bg-white">
         <div className="container-pg flex h-14 items-center justify-between">
           <Logo />
-          <span className="text-xs text-muted-foreground">{user?.phone} · admin</span>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="hidden text-xs text-muted-foreground sm:inline">{user?.phone} · admin</span>
+            <Link href="/" className="text-muted-foreground hover:text-ink">
+              View site
+            </Link>
+            <LogoutButton variant="ghost" size="sm" showIcon />
+          </div>
         </div>
       </header>
       <div className="container-pg flex flex-col gap-6 py-6 md:flex-row">

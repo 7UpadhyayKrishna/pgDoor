@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
-import { Button } from "@/components/ui/button";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,6 @@ export default async function AccountPage() {
         {[
           ["/saved", "Saved PGs"],
           ["/alerts", "Saved searches & alerts"],
-          ["/roommates", "Roommate matching"],
           ["/account/enquiries", "My enquiries"],
           ["/account/visits", "My visits"],
           ["/pgs", "Recently viewed"],
@@ -27,20 +26,9 @@ export default async function AccountPage() {
           </li>
         ))}
       </ul>
-      <form
-        className="mt-8"
-        action={async () => {
-          "use server";
-          const { logout } = await import("@/modules/auth");
-          const { redirect } = await import("next/navigation");
-          await logout();
-          redirect("/");
-        }}
-      >
-        <Button type="submit" variant="outline">
-          Logout
-        </Button>
-      </form>
+      <div className="mt-8">
+        <LogoutButton />
+      </div>
     </div>
   );
 }

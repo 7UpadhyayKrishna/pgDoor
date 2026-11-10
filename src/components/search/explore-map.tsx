@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { loadGoogleMaps, formatRentPin, getMapsBrowserKey } from "@/lib/google-maps";
+import {
+  formatRentPin,
+  getMapsBrowserKey,
+  loadGoogleMaps,
+  onMapsAuthFailure,
+} from "@/lib/google-maps";
 import type { MapPin } from "@/modules/search";
 import type { MapPoiLayer } from "@/lib/places";
 import { PG_TYPE_COLOR, PG_TYPE_LEGEND } from "@/lib/pg-type-colors";
@@ -31,6 +36,8 @@ const LAYER_LABELS: { id: MapPoiLayer; label: string }[] = [
   { id: "lifestyle", label: "Lifestyle" },
   { id: "essentials", label: "Essentials" },
 ];
+
+const MAP_UNAVAILABLE = "The map is unavailable right now. You can still browse every PG in the list.";
 
 const LAYER_COLORS: Record<MapPoiLayer, string> = {
   transport: "#2563eb",
@@ -85,6 +92,7 @@ export function ExploreMap({
   onSearchArea,
   onDropPin,
   isochrones,
+  onShowList,
   className,
 }: {
   pins: MapPin[];
@@ -95,6 +103,7 @@ export function ExploreMap({
   onSearchArea?: (bounds: { south: number; west: number; north: number; east: number }) => void;
   onDropPin?: (point: { lat: number; lng: number }) => void;
   isochrones?: { minutes: number; path: { lat: number; lng: number }[] }[];
+  onShowList?: () => void;
   className?: string;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -131,12 +140,12 @@ export function ExploreMap({
     async function initMap() {
       if (!mapRef.current || mapInstance.current) return;
       if (!getMapsBrowserKey()) {
-        setError("Map key not configured (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)");
+        setError(MAP_UNAVAILABLE);
         return;
       }
       const g = await loadGoogleMaps();
       if (cancelled || !g || !mapRef.current) {
-        if (!cancelled && !g) setError("Could not load Google Maps");
+        if (!cancelled && !g) setError(MAP_UNAVAILABLE);
         return;
       }
 
@@ -168,8 +177,12 @@ export function ExploreMap({
     }
 
     void initMap();
+    const stopAuthListener = onMapsAuthFailure(() => {
+      if (!cancelled) setError(MAP_UNAVAILABLE);
+    });
     return () => {
       cancelled = true;
+      stopAuthListener();
       if (idleListener.current) {
         idleListener.current.remove();
         idleListener.current = null;
@@ -408,19 +421,33 @@ export function ExploreMap({
       <div ref={mapRef} className="absolute inset-0" />
 
       {error ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-canvas p-6 text-center text-sm text-muted-foreground">
-          {error}
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-canvas p-6 text-center text-sm text-muted-foreground">
+          <p>{error}</p>
+          {onShowList ? (
+            <button
+              type="button"
+              onClick={onShowList}
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink shadow-card ring-1 ring-border"
+            >
+              Switch to list
+            </button>
+          ) : null}
         </div>
       ) : null}
 
-      <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5">
+      <div
+        className={cn(
+          "absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5",
+          error && "hidden",
+        )}
+      >
         {LAYER_LABELS.map((layer) => (
           <button
             key={layer.id}
             type="button"
             onClick={() => toggleLayer(layer.id)}
             className={cn(
-              "rounded-full px-2.5 py-1 text-xs font-medium shadow-card",
+              "min-h-9 rounded-full px-3 text-xs font-semibold shadow-card",
               layers.has(layer.id)
                 ? "bg-ink text-white"
                 : "bg-white/95 text-ink",

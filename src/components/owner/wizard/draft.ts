@@ -208,7 +208,7 @@ export function draftToPayload(draft: ListingDraft) {
     rooms: enabledRooms(draft).map((room) => ({
       sharingType: room.sharingType,
       rent: toInt(room.rent) ?? 0,
-      deposit: toInt(room.deposit) ?? 0,
+      deposit: toInt(room.deposit) ?? null,
       roomCount: toInt(room.roomCount) ?? 0,
       availableBeds: toInt(room.availableBeds) ?? 0,
     })),
@@ -248,7 +248,7 @@ type PropertyForDraft = {
   roomTypes: {
     sharingType: SharingType;
     rent: number;
-    deposit: number;
+    deposit: number | null;
     availableBeds: number;
     rooms: { id: string }[];
   }[];

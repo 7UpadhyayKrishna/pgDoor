@@ -88,7 +88,7 @@ export function StepRooms({ draft, update, errors }: StepProps) {
                     onChange={(rent) => setRoom(index, { rent })}
                   />
                 </Field>
-                <Field label="Security deposit" hint="One-time, refundable">
+                <Field label="Security deposit" hint="One-time, refundable. Enter 0 if there is none; leave blank if unsure">
                   <NumberInput
                     prefix="₹"
                     value={room.deposit}

@@ -255,6 +255,7 @@ model User {
   chatMessages       ChatMessage[]
   searches           UserSearch[]
   alerts             Alert[]
+  availabilityWatches AvailabilityWatch[]
   roommateProfile    RoommateProfile?
   roommateMatchesA   RoommateMatch[]     @relation("RoommateA")
   roommateMatchesB   RoommateMatch[]     @relation("RoommateB")
@@ -376,7 +377,8 @@ model Property {
   verificationLevel       VerificationLevel @default(UNVERIFIED)
   featured                Boolean           @default(false)
   minRent                 Int               @default(0)
-  minDeposit              Int               @default(0)
+  /// Null when no room has a known deposit ("Ask owner"), never a stand-in 0.
+  minDeposit              Int?
   availableBeds           Int               @default(0)
   totalBeds               Int               @default(0)
   foodIncluded            Boolean           @default(false)
@@ -423,6 +425,8 @@ model Property {
   leadEvents            LeadEvent[]
   commuteEdges          CommuteEdge[]
   propertyPois          PropertyPoi[]
+  availabilityWatches   AvailabilityWatch[]
+  slugRedirects         PropertySlugRedirect[]
 
   @@index([cityId, status])
   @@index([areaId, status])
@@ -432,12 +436,37 @@ model Property {
   @@index([latitude, longitude])
 }
 
+/// A tenant asked to be told when a full PG has a free bed again.
+model AvailabilityWatch {
+  id         String    @id @default(cuid())
+  userId     String
+  propertyId String
+  notifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([propertyId, notifiedAt])
+}
+
+/// Old slugs keep resolving (301) after a listing is renamed or re-pinned.
+model PropertySlugRedirect {
+  slug       String   @id
+  propertyId String
+  createdAt  DateTime @default(now())
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
 model RoomType {
   id            String          @id @default(cuid())
   propertyId    String
   sharingType   RoomSharingType
   rent          Int
-  deposit       Int
+  /// Null = owner hasn't told us; 0 = confirmed zero deposit.
+  deposit       Int?
   totalBeds     Int
   availableBeds Int
   rooms         Room[]

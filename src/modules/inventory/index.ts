@@ -5,11 +5,13 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { bedsPerSharing } from "@/lib/utils";
+import { minKnownDeposit } from "@/lib/format";
+import { notifyWatchersIfReopened } from "@/modules/availability-watch";
 
 export type RoomSpec = {
   sharingType: RoomSharingType;
   rent: number;
-  deposit: number;
+  deposit: number | null;
   roomCount: number;
   availableBeds: number;
 };
@@ -97,7 +99,7 @@ export async function syncDenormalized(
   let totalBeds = 0;
   let availableBeds = 0;
   let minRent = Number.POSITIVE_INFINITY;
-  let minDeposit = Number.POSITIVE_INFINITY;
+  const minDeposit = minKnownDeposit(roomTypes.map((rt) => rt.deposit));
 
   for (const rt of roomTypes) {
     const beds = rt.rooms.flatMap((room) => room.beds);
@@ -105,7 +107,6 @@ export async function syncDenormalized(
     totalBeds += beds.length;
     availableBeds += available;
     if (rt.rent < minRent) minRent = rt.rent;
-    if (rt.deposit < minDeposit) minDeposit = rt.deposit;
     if (rt.totalBeds !== beds.length || rt.availableBeds !== available) {
       await client.roomType.update({
         where: { id: rt.id },
@@ -114,16 +115,24 @@ export async function syncDenormalized(
     }
   }
 
-  return client.property.update({
+  const before = await client.property.findUnique({
+    where: { id: propertyId },
+    select: { availableBeds: true },
+  });
+  const updated = await client.property.update({
     where: { id: propertyId },
     data: {
       totalBeds,
       availableBeds,
       minRent: Number.isFinite(minRent) ? minRent : 0,
-      minDeposit: Number.isFinite(minDeposit) ? minDeposit : 0,
+      minDeposit,
       availabilityUpdatedAt: new Date(),
     },
   });
+  if (before && updated.status === "PUBLISHED") {
+    await notifyWatchersIfReopened(updated, before.availableBeds, client);
+  }
+  return updated;
 }
 
 export async function confirmAvailability(propertyId: string) {

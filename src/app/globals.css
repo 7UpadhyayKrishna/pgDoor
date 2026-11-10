@@ -2,12 +2,12 @@
 
 :root {
   --ink: #0f172a;
-  --primary: #7a9b80;
-  --primary-hover: #688a6e;
+  --primary: #557a5c; /* 4.8:1 with white text (WCAG AA) */
+  --primary-hover: #476a4e;
   --primary-soft: #eaf0eb;
   --canvas: #f3f6f4;
   --surface: #ffffff;
-  --success: #16a34a;
+  --success: #15803d;
   --warning: #d97706;
   --error: #dc2626;
   --muted: #94a3b8;
@@ -20,13 +20,13 @@
   --primary-foreground: #ffffff;
   --secondary: #f3f6f4;
   --secondary-foreground: #0f172a;
-  --muted-foreground: #64748b;
+  --muted-foreground: #475569;
   --accent: #eaf0eb;
   --accent-foreground: #0f172a;
   --destructive: #dc2626;
   --border: #e5e7eb;
   --input: #e5e7eb;
-  --ring: #7a9b80;
+  --ring: #557a5c;
   --radius: 0.9rem;
   --shadow-card: 0 4px 20px rgba(15, 23, 42, 0.06);
 }

@@ -53,7 +53,7 @@ export function ViewToggle({
           aria-checked={view === id}
           onClick={() => onChange(id)}
           className={cn(
-            "flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors",
+            "flex h-11 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors",
             view === id ? "bg-white text-ink" : "text-white/80 hover:text-white",
           )}
         >

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { removeCompare, useCompareItems } from "@/lib/compare-store";
 import { MEAL_LABEL, SHARING_LABEL, VERIFICATION_LABEL } from "@/lib/constants";
 import { distanceLine, googleDirectionsUrl, listingHref, type Origin } from "@/lib/directions";
-import { formatGateTime, formatInr } from "@/lib/format";
+import { formatDeposit, formatGateTime, formatInr } from "@/lib/format";
 import {
   DEALBREAKER_CAP,
   EMPTY_REQUIREMENTS,
@@ -381,7 +381,7 @@ function CompareTable({
     {
       label: "Deposit",
       render: (pg) =>
-        `${formatInr(pg.minDeposit)}${pg.maintenanceCharge ? ` · ${formatInr(pg.maintenanceCharge)} maintenance` : ""}`,
+        `${formatDeposit(pg.minDeposit)}${pg.maintenanceCharge ? ` · ${formatInr(pg.maintenanceCharge)} maintenance` : ""}`,
     },
     {
       label: "Sharing options",

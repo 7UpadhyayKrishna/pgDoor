@@ -30,6 +30,7 @@ export function ExploreShell({
   pageSize,
   total,
   destination,
+  emptyState,
 }: {
   properties: Card[];
   pins: MapPin[];
@@ -37,6 +38,7 @@ export function ExploreShell({
   pageSize: number;
   total: number;
   destination?: { lat: number; lng: number; label?: string; mode?: string } | null;
+  emptyState?: ReactNode;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -119,6 +121,9 @@ export function ExploreShell({
 
   return (
     <div className="relative">
+      <div className="mb-4 flex justify-end">
+        <ViewToggle view={view} onChange={setView} />
+      </div>
       <div
         className={cn(
           layout === "split" || layout === "auto"
@@ -142,6 +147,7 @@ export function ExploreShell({
               destination={destination}
               onSearchArea={onSearchArea}
               isochrones={isochrones}
+              onShowList={() => setView("list")}
               onDropPin={(point) => {
                 const next = new URLSearchParams(params.toString());
                 next.set("destLat", String(point.lat));
@@ -166,9 +172,7 @@ export function ExploreShell({
               )}
             >
               {properties.length === 0 ? (
-                <p className="rounded-[18px] bg-primary-soft px-4 py-8 text-center text-sm text-muted-foreground sm:col-span-full">
-                  No PGs in this area. Try widening your commute or budget.
-                </p>
+                <div className="sm:col-span-full">{emptyState}</div>
               ) : (
                 properties.map((property) => (
                   <div
@@ -228,7 +232,7 @@ export function ExploreShell({
         </div>
       ) : null}
 
-      {/* Bottom stack: mobile preview, compare tray, view toggle */}
+      {/* Bottom stack: mobile preview and compare tray */}
       <div className="pointer-events-none fixed inset-x-0 bottom-[4.5rem] z-30 flex flex-col items-center gap-2 px-4 md:bottom-6">
         {selected && showPreview ? (
           <div className="pointer-events-auto w-full max-w-md rounded-[18px] bg-white p-4 shadow-card ring-1 ring-border lg:hidden">
@@ -236,7 +240,6 @@ export function ExploreShell({
           </div>
         ) : null}
         <CompareTray />
-        <ViewToggle view={view} onChange={setView} />
       </div>
     </div>
   );

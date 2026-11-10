@@ -32,7 +32,7 @@ export function MobileNav({ prelaunch }: { prelaunch: boolean }) {
               <Link
                 href={item.href}
                 className={cn(
-                  "flex min-h-11 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium",
+                  "flex min-h-11 flex-col items-center justify-center gap-0.5 py-2 text-xs font-medium",
                   active ? "text-primary" : "text-muted",
                 )}
               >

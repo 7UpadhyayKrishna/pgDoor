@@ -38,6 +38,12 @@ export function savePreferredLocation(location: SavedLocation) {
   window.dispatchEvent(new Event(EVENT));
 }
 
+export function clearPreferredLocation() {
+  if (localStorage.getItem(KEY) == null) return;
+  localStorage.removeItem(KEY);
+  window.dispatchEvent(new Event(EVENT));
+}
+
 function subscribe(callback: () => void) {
   window.addEventListener(EVENT, callback);
   window.addEventListener("storage", callback);

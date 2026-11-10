@@ -16,7 +16,7 @@ export type ComparePg = {
   longitude: number;
   photo: string | null;
   minRent: number;
-  minDeposit: number;
+  minDeposit: number | null;
   maintenanceCharge: number | null;
   electricityNote: string | null;
   availableBeds: number;
@@ -24,7 +24,7 @@ export type ComparePg = {
   roomTypes: {
     sharingType: RoomSharingType;
     rent: number;
-    deposit: number;
+    deposit: number | null;
     availableBeds: number;
     totalBeds: number;
   }[];

@@ -52,8 +52,8 @@ const featureGroups: { title: string; subtitle: string; features: Feature[] }[] 
     features: [
       {
         icon: BadgeCheck,
-        title: "Verified listings",
-        body: "Our team checks the location, photos and pricing of every PG before it goes live.",
+        title: "Reviewed before going live",
+        body: "Our team reviews every listing before it goes live. PGs we've checked in person carry a Verified badge.",
       },
       {
         icon: Camera,

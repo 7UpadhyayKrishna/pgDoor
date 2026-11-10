@@ -11,14 +11,24 @@ import { MOVE_IN_LABEL } from "@/lib/constants";
 const WINDOWS = ["IMMEDIATE", "WITHIN_7_DAYS", "THIS_MONTH", "LATER"] as const;
 const ROOMS = ["SINGLE", "DOUBLE", "TRIPLE"] as const;
 
+function whatsAppUrl(phone: string, propertyName?: string) {
+  const digits = phone.replace(/\D/g, "");
+  const text = propertyName
+    ? `Hi, I found ${propertyName} on pgDoor and sent an enquiry. Is a bed available?`
+    : "Hi, I found your PG on pgDoor and sent an enquiry. Is a bed available?";
+  return `https://wa.me/${digits.length === 10 ? `91${digits}` : digits}?text=${encodeURIComponent(text)}`;
+}
+
 export function EnquirySheet({
   propertyId,
   triggerClassName,
   triggerVariant = "outline" as const,
+  propertyName,
 }: {
   propertyId: string;
   triggerClassName?: string;
   triggerVariant?: "outline" | "default";
+  propertyName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"form" | "otp" | "done">("form");
@@ -31,6 +41,7 @@ export function EnquirySheet({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [ownerContact, setOwnerContact] = useState<{ name: string | null; phone: string } | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
 
   async function sendOtp() {
@@ -82,6 +93,7 @@ export function EnquirySheet({
       return;
     }
     setLeadId(data.lead?.id ?? null);
+    setOwnerContact(data.lead?.ownerContact ?? null);
     setStep("done");
   }
 
@@ -166,10 +178,16 @@ export function EnquirySheet({
                 <Label>Phone</Label>
                 <Input
                   className="mt-2"
-                  placeholder="+91"
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="10-digit mobile"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  After a quick OTP you&apos;ll get the owner&apos;s WhatsApp and phone number.
+                </p>
               </div>
               {error ? <p className="text-sm text-error">{error}</p> : null}
               <Button className="w-full" onClick={sendOtp} disabled={loading || phone.length < 10}>
@@ -180,7 +198,13 @@ export function EnquirySheet({
           {step === "otp" ? (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-muted-foreground">Enter the OTP sent to {phone}.</p>
-              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="OTP" />
+              <Input
+                value={code}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="OTP"
+              />
               {error ? <p className="text-sm text-error">{error}</p> : null}
               <Button className="w-full" onClick={verifyAndSend} disabled={loading}>
                 Verify & send
@@ -192,6 +216,22 @@ export function EnquirySheet({
               <p className="text-sm text-muted-foreground">
                 The owner will see your enquiry. You can chat with them on pgDoor now.
               </p>
+              {ownerContact ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button asChild variant="outline">
+                    <a
+                      href={whatsAppUrl(ownerContact.phone, propertyName)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      WhatsApp owner
+                    </a>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <a href={`tel:${ownerContact.phone}`}>Call owner</a>
+                  </Button>
+                </div>
+              ) : null}
               {leadId ? (
                 <Button
                   className="w-full"

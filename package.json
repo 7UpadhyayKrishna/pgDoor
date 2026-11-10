@@ -17,6 +17,8 @@
     "db:seed:samples": "tsx prisma/seed/samples-only.ts",
     "db:samples:remove": "tsx prisma/seed/remove-samples.ts",
     "db:studio": "prisma studio",
+    "db:fix:deposits": "tsx prisma/scripts/deposits-zero-to-null.ts",
+    "db:slugs": "tsx prisma/scripts/rebuild-slugs.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

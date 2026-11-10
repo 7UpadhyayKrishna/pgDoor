@@ -6,6 +6,8 @@ export {
   listOwnerProperties,
   getPublishedBySlug,
   getFeatured,
+  getSimilarOpen,
+  resolveSlugRedirect,
   incrementView,
   uniqueSlug,
   toPublicCard,

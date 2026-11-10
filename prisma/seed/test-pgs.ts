@@ -236,7 +236,7 @@ function generatePg(
       verificationLevel,
       featured,
       minRent: Number.isFinite(minRent) ? minRent : 0,
-      minDeposit: Number.isFinite(minDeposit) ? minDeposit : 0,
+      minDeposit: Number.isFinite(minDeposit) ? minDeposit : null,
       totalBeds,
       availableBeds,
       foodIncluded,

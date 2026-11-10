@@ -14,6 +14,20 @@ export function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+/**
+ * "Prince PG (Sector 45)" in Sector 45, Gurgaon -> "prince-pg-sector-45-gurgaon":
+ * the area and city are appended only when the name doesn't already contain them.
+ */
+export function listingSlug(name: string, areaName: string, cityName: string) {
+  let slug = slugify(name);
+  for (const part of [slugify(areaName), slugify(cityName)]) {
+    if (!part) continue;
+    if (`-${slug}-`.includes(`-${part}-`)) continue;
+    slug = slug ? `${slug}-${part}` : part;
+  }
+  return slug;
+}
+
 export function bedsPerSharing(type: "SINGLE" | "DOUBLE" | "TRIPLE" | "FOUR") {
   switch (type) {
     case "SINGLE":

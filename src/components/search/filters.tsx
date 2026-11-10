@@ -18,13 +18,41 @@ const AMENITIES = [
 ];
 
 const SORTS = [
-  { value: "true_cost", label: "True monthly cost" },
-  { value: "commute", label: "Shortest commute" },
-  { value: "rent", label: "Rent: Low to High" },
-  { value: "rent_desc", label: "Rent: High to Low" },
-  { value: "rating", label: "Rating" },
-  { value: "freshness", label: "Recently Updated" },
+  { value: "relevance", label: "Best match", needsDestination: false },
+  { value: "true_cost", label: "True monthly cost", needsDestination: true },
+  { value: "commute", label: "Shortest commute", needsDestination: true },
+  { value: "rent", label: "Rent: low to high", needsDestination: false },
+  { value: "rent_desc", label: "Rent: high to low", needsDestination: false },
+  { value: "newest", label: "Newest", needsDestination: false },
+  { value: "freshness", label: "Recently updated", needsDestination: false },
+  { value: "rating", label: "Rating", needsDestination: false },
 ];
+
+/** Commute sorts only mean something once a destination is set. */
+function sortOptions(hasDestination: boolean) {
+  return SORTS.filter((s) => hasDestination || !s.needsDestination);
+}
+
+function currentSort(params: URLSearchParams, hasDestination: boolean) {
+  const raw = params.get("sort");
+  const fallback = hasDestination ? "true_cost" : "relevance";
+  return sortOptions(hasDestination).some((s) => s.value === raw) ? raw! : fallback;
+}
+
+/** dd/mm/yyyy (how India writes dates) <-> yyyy-mm-dd (what the URL and API use). */
+function isoToDisplay(iso: string | null) {
+  const match = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+}
+
+function displayToIso(text: string) {
+  const match = text.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (!match) return null;
+  const [, d, m, y] = match;
+  const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  const date = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(date.getTime()) || date.getDate() !== Number(d) ? null : iso;
+}
 
 const COMMUTE_OPTIONS = [10, 20, 30, 45, 60, 90];
 const COST_OPTIONS = [50, 100, 150, 200, 300];
@@ -70,13 +98,47 @@ export function FilterForm({
 }) {
   const { params, apply, pathname, router } = useFilterNav();
   const [budget, setBudget] = useState(Number(params.get("budgetMax") ?? 25000));
+  const [moveIn, setMoveIn] = useState(isoToDisplay(params.get("availableFrom")));
+  const [moveInError, setMoveInError] = useState("");
   const hasDestination = Boolean(params.get("destLat") && params.get("destLng"));
   const commuteVisible = showCommute || hasDestination;
 
+  function applyMoveIn() {
+    if (!moveIn.trim()) {
+      setMoveInError("");
+      apply((n) => n.delete("availableFrom"));
+      return;
+    }
+    const iso = displayToIso(moveIn);
+    if (!iso) {
+      setMoveInError("Use dd/mm/yyyy, e.g. 05/12/2026");
+      return;
+    }
+    setMoveInError("");
+    apply((n) => n.set("availableFrom", iso));
+  }
+
   return (
     <div className="space-y-6">
+      {onDone ? null : (
+        <div>
+          <Label htmlFor="sort-select">Sort by</Label>
+          <select
+            id="sort-select"
+            className="mt-2 h-11 w-full rounded-[12px] border border-input bg-white px-3 text-sm"
+            value={currentSort(params, hasDestination)}
+            onChange={(e) => apply((n) => n.set("sort", e.target.value))}
+          >
+            {sortOptions(hasDestination).map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div>
-        <Label>Budget</Label>
+        <Label>Rent budget</Label>
         <input
           type="range"
           min={5000}
@@ -88,7 +150,7 @@ export function FilterForm({
           onTouchEnd={() => apply((n) => n.set("budgetMax", String(budget)))}
           className="mt-3 w-full accent-primary"
         />
-        <p className="mt-1 text-sm text-muted-foreground">Up to ₹{budget.toLocaleString("en-IN")}</p>
+        <p className="mt-1 text-sm text-muted-foreground">Rent up to ₹{budget.toLocaleString("en-IN")}</p>
       </div>
       {commuteVisible ? (
         <>
@@ -235,8 +297,13 @@ export function FilterForm({
       </div>
       <div>
         <Label>PG for</Label>
-        <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
-          {["BOYS", "GIRLS", "UNISEX"].map((type) => (
+        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          {[
+            { value: "BOYS", label: "Boys" },
+            { value: "GIRLS", label: "Girls" },
+            { value: "UNISEX", label: "Unisex" },
+            { value: "CO_LIVING", label: "Co-living" },
+          ].map(({ value: type, label }) => (
             <button
               key={type}
               type="button"
@@ -252,24 +319,33 @@ export function FilterForm({
                   : "border-input"
               }`}
             >
-              {type[0] + type.slice(1).toLowerCase()}
+              {label}
             </button>
           ))}
         </div>
       </div>
       <div>
-        <Label>Move-in date</Label>
+        <Label htmlFor="move-in-date">Move-in date</Label>
         <input
-          type="date"
-          className="mt-2 h-11 w-full rounded-[12px] border border-input px-3 text-sm"
-          defaultValue={params.get("availableFrom") ?? ""}
-          onChange={(e) =>
-            apply((n) => {
-              if (!e.target.value) n.delete("availableFrom");
-              else n.set("availableFrom", e.target.value);
-            })
-          }
+          id="move-in-date"
+          type="text"
+          inputMode="numeric"
+          placeholder="dd/mm/yyyy"
+          className="mt-2 h-11 w-full rounded-[12px] border border-input bg-white px-3 text-sm"
+          value={moveIn}
+          onChange={(e) => setMoveIn(e.target.value.replace(/[^\d/.-]/g, "").slice(0, 10))}
+          onBlur={applyMoveIn}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") applyMoveIn();
+          }}
+          aria-invalid={Boolean(moveInError)}
+          aria-describedby={moveInError ? "move-in-error" : undefined}
         />
+        {moveInError ? (
+          <p id="move-in-error" className="mt-1 text-xs text-error">
+            {moveInError}
+          </p>
+        ) : null}
       </div>
       <MetroLinePicker />
       <div>
@@ -342,6 +418,8 @@ function FilterSheet() {
 
 function SortSheet() {
   const { params, apply } = useFilterNav();
+  const hasDestination = Boolean(params.get("destLat") && params.get("destLng"));
+  const active = currentSort(params, hasDestination);
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -352,13 +430,13 @@ function SortSheet() {
       <SheetContent>
         <SheetTitle>Sort by</SheetTitle>
         <ul className="mt-4 space-y-2">
-          {SORTS.map((s) => (
+          {sortOptions(hasDestination).map((s) => (
             <li key={s.value}>
               <button
                 type="button"
                 onClick={() => apply((n) => n.set("sort", s.value))}
                 className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${
-                  (params.get("sort") ?? "relevance") === s.value
+                  active === s.value
                     ? "bg-primary-soft font-semibold"
                     : ""
                 }`}

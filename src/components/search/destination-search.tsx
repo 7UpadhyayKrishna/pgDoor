@@ -38,17 +38,23 @@ export function DestinationSearch({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [interacted, setInteracted] = useState(false);
   const skipFetch = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (value !== undefined) setQuery(value);
   }, [value]);
 
+  // Suggestions load only once the tenant focuses or types, so the list never covers
+  // the commute and budget controls on page load.
   useEffect(() => {
+    if (!interacted) return;
     if (skipFetch.current) {
       skipFetch.current = false;
       return;
     }
+    let cancelled = false;
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
@@ -56,20 +62,24 @@ export function DestinationSearch({
           `/api/destinations/suggest?q=${encodeURIComponent(query.trim())}`,
         );
         const data = await res.json();
+        if (cancelled) return;
         if (res.ok) {
           setSuggestions(data.suggestions ?? []);
-          setOpen(true);
+          if (document.activeElement === inputRef.current) setOpen(true);
         } else {
           setSuggestions([]);
         }
       } catch {
         setSuggestions([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [query]);
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, interacted]);
 
   async function pick(suggestion: Suggestion) {
     if (suggestion.latitude != null && suggestion.longitude != null) {
@@ -117,23 +127,26 @@ export function DestinationSearch({
       <div className="relative mt-1">
         <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
+          ref={inputRef}
           type="text"
           value={query}
           autoComplete="off"
           placeholder={placeholder}
           onChange={(e) => {
+            setInteracted(true);
             setQuery(e.target.value);
             setOpen(true);
             if (!e.target.value) onClear?.();
           }}
           onFocus={() => {
+            setInteracted(true);
             if (suggestions.length) setOpen(true);
           }}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           className="h-12 w-full rounded-[20px] border-0 bg-canvas pl-9 pr-4 text-sm font-medium text-ink"
         />
       </div>
-      {loading ? (
+      {loading && open ? (
         <p className="mt-1 px-2 text-xs text-muted-foreground">Searching…</p>
       ) : null}
       {open && suggestions.length > 0 ? (
