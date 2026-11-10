@@ -1,0 +1,9 @@
+# DOMAIN is the bare domain (e.g. pgdoor.in); the site is served on www, matching siteUrl().
+www.{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000
+}
+
+{$DOMAIN} {
+	redir https://www.{$DOMAIN}{uri} permanent
+}

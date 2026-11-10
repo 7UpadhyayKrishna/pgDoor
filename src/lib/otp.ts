@@ -13,7 +13,11 @@ export function otpProvider() {
 
 /** The fixed dev code is never honoured on a production deploy, whatever OTP_PROVIDER says. */
 export function isDevOtp() {
-  return otpProvider() === "dev" && process.env.VERCEL_ENV !== "production";
+  return (
+    otpProvider() === "dev" &&
+    process.env.VERCEL_ENV !== "production" &&
+    process.env.APP_ENV !== "production"
+  );
 }
 
 export function generateOtpCode() {

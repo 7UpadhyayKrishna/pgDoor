@@ -1,0 +1,36 @@
+# Runs on the EC2 host from /opt/pgdoor. APP_IMAGE and DOMAIN are read from /opt/pgdoor/.env,
+# which the deploy workflow writes from the PROD_ENV secret.
+services:
+  app:
+    image: ${APP_IMAGE:?set APP_IMAGE in .env}
+    container_name: pgdoor-app
+    env_file: .env
+    restart: unless-stopped
+    expose:
+      - "3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: pgdoor-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

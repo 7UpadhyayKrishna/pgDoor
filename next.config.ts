@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { CITY_SLUG_ALIASES } from "./src/lib/cities";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   images: {
     remotePatterns: [
       {

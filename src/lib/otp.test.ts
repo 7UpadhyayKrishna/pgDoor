@@ -11,8 +11,18 @@ describe("dev OTP", () => {
     vi.stubEnv("OTP_PROVIDER", "dev");
     vi.stubEnv("OTP_BYPASS_CODE", "123456");
     vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("APP_ENV", "");
     expect(isDevOtp()).toBe(true);
     expect(generateOtpCode()).toBe("123456");
+  });
+
+  it("never uses the bypass code on a self-hosted production deploy", () => {
+    vi.stubEnv("OTP_PROVIDER", "dev");
+    vi.stubEnv("OTP_BYPASS_CODE", "123456");
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("APP_ENV", "production");
+    expect(isDevOtp()).toBe(false);
+    expect(generateOtpCode()).not.toBe("123456");
   });
 
   it("never uses the bypass code on a production deploy", () => {
