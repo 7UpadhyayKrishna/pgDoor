@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { MetroLinePicker } from "@/components/search/metro-line-picker";
 
 const AMENITIES = [
   { slug: "ac", label: "AC" },
@@ -17,20 +18,23 @@ const AMENITIES = [
 ];
 
 const SORTS = [
-  { value: "relevance", label: "Recommended" },
+  { value: "true_cost", label: "True monthly cost" },
   { value: "commute", label: "Shortest commute" },
-  { value: "rent", label: "Price: Low to High" },
-  { value: "rent_desc", label: "Price: High to Low" },
+  { value: "rent", label: "Rent: Low to High" },
+  { value: "rent_desc", label: "Rent: High to Low" },
   { value: "rating", label: "Rating" },
   { value: "freshness", label: "Recently Updated" },
 ];
 
-const COMMUTE_OPTIONS = [15, 20, 30, 45];
+const COMMUTE_OPTIONS = [10, 20, 30, 45, 60, 90];
+const COST_OPTIONS = [50, 100, 150, 200, 300];
 const MODE_OPTIONS = [
-  { value: "transit", label: "Transit" },
-  { value: "driving", label: "Car" },
-  { value: "bicycling", label: "Bike" },
-  { value: "walking", label: "Walk" },
+  { value: "metro", label: "Metro" },
+  { value: "bus", label: "Bus" },
+  { value: "auto", label: "Auto" },
+  { value: "walk", label: "Walk" },
+  { value: "rapido", label: "Rapido" },
+  { value: "own_vehicle", label: "Own vehicle" },
 ];
 
 export function FilterControls() {
@@ -113,6 +117,71 @@ export function FilterForm({
             </div>
           </div>
           <div>
+            <Label>Max daily commute cost</Label>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+              {COST_OPTIONS.map((cost) => (
+                <button
+                  key={cost}
+                  type="button"
+                  onClick={() =>
+                    apply((n) => {
+                      if (n.get("maxDailyCost") === String(cost)) n.delete("maxDailyCost");
+                      else n.set("maxDailyCost", String(cost));
+                    })
+                  }
+                  className={`min-h-11 rounded-xl border px-2 ${
+                    params.get("maxDailyCost") === String(cost)
+                      ? "border-primary bg-primary-soft text-ink"
+                      : "border-input"
+                  }`}
+                >
+                  ₹{cost}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label>Arrival time</Label>
+            <input
+              type="time"
+              defaultValue={params.get("arrivalTime") ?? "09:30"}
+              onBlur={(e) => apply((n) => n.set("arrivalTime", e.target.value || "09:30"))}
+              className="mt-2 h-11 w-full rounded-xl border border-input bg-white px-3 text-sm"
+            />
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              {(["weighted", "fair"] as const).map((style) => (
+                <button
+                  key={style}
+                  type="button"
+                  onClick={() => apply((n) => n.set("rankingStyle", style))}
+                  className={`min-h-11 rounded-xl border px-2 ${
+                    (params.get("rankingStyle") ?? "weighted") === style
+                      ? "border-primary bg-primary-soft text-ink"
+                      : "border-input"
+                  }`}
+                >
+                  {style === "fair" ? "Fair (worse commute)" : "Weighted"}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              {(["peak", "offpeak"] as const).map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => apply((n) => n.set("slot", slot))}
+                  className={`min-h-11 rounded-xl border px-2 ${
+                    (params.get("slot") ?? "peak") === slot
+                      ? "border-primary bg-primary-soft text-ink"
+                      : "border-input"
+                  }`}
+                >
+                  {slot === "peak" ? "Peak" : "Off-peak"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
             <Label>Travel mode</Label>
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
               {MODE_OPTIONS.map((opt) => (
@@ -123,12 +192,12 @@ export function FilterForm({
                     apply((n) => {
                       n.set("mode", opt.value);
                       if (!n.get("sort") || n.get("sort") === "relevance") {
-                        n.set("sort", "commute");
+                        n.set("sort", "true_cost");
                       }
                     })
                   }
                   className={`min-h-11 rounded-xl border px-2 ${
-                    (params.get("mode") ?? "transit") === opt.value
+                    (params.get("mode") ?? "metro") === opt.value
                       ? "border-primary bg-primary-soft text-ink"
                       : "border-input"
                   }`}
@@ -202,6 +271,7 @@ export function FilterForm({
           }
         />
       </div>
+      <MetroLinePicker />
       <div>
         <Label>Amenities</Label>
         <ul className="mt-2 space-y-2 text-sm">

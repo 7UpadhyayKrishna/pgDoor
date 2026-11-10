@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -40,6 +40,7 @@ export function ExploreShell({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [isochrones, setIsochrones] = useState<{ minutes: number; path: { lat: number; lng: number }[] }[]>([]);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const router = useRouter();
   const pathname = usePathname();
@@ -52,6 +53,22 @@ export function ExploreShell({
   const layout = explicitView ?? "auto";
   const showMap = view !== "list";
   const showList = view !== "map";
+
+  useEffect(() => {
+    if (!destination) {
+      setIsochrones([]);
+      return;
+    }
+    const qs = new URLSearchParams({
+      destLat: String(destination.lat),
+      destLng: String(destination.lng),
+      mode: destination.mode ?? "metro",
+    });
+    fetch(`/api/commute/isochrones?${qs}`)
+      .then((r) => r.json())
+      .then((data) => setIsochrones(data.isochrones ?? []))
+      .catch(() => setIsochrones([]));
+  }, [destination]);
 
   const origin: Origin | null = destination
     ? { lat: destination.lat, lng: destination.lng, label: destination.label, mode: destination.mode }
@@ -124,6 +141,16 @@ export function ExploreShell({
               onSelect={onPinSelect}
               destination={destination}
               onSearchArea={onSearchArea}
+              isochrones={isochrones}
+              onDropPin={(point) => {
+                const next = new URLSearchParams(params.toString());
+                next.set("destLat", String(point.lat));
+                next.set("destLng", String(point.lng));
+                next.set("destLabel", "Dropped pin");
+                next.set("sort", "true_cost");
+                next.delete("page");
+                router.push(`${pathname}?${next.toString()}`);
+              }}
               className="h-full"
             />
           </div>

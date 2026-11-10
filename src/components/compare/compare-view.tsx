@@ -359,6 +359,26 @@ function CompareTable({
   const rows: Row[] = [
     { label: "Rent from", key: "budget", render: (pg) => `${formatInr(pg.minRent)}/mo` },
     {
+      label: "True monthly cost",
+      render: (pg) =>
+        pg.commute?.trueMonthlyCost ? formatInr(pg.commute.trueMonthlyCost) : "—",
+    },
+    {
+      label: "Commute by mode",
+      render: (pg) =>
+        pg.commute?.quotes?.length
+          ? pg.commute.quotes.map((q) => `${q.mode}: ${q.minutes} min · ${formatInr(q.monthlyCost)}`).join(" · ")
+          : "—",
+    },
+    {
+      label: "Livability",
+      render: (pg) => (pg.livabilityScore != null ? `${pg.livabilityScore}/100` : "—"),
+    },
+    {
+      label: "Safety (indicative)",
+      render: (pg) => (pg.safetyScore != null ? `${pg.safetyScore}/100` : "—"),
+    },
+    {
       label: "Deposit",
       render: (pg) =>
         `${formatInr(pg.minDeposit)}${pg.maintenanceCharge ? ` · ${formatInr(pg.maintenanceCharge)} maintenance` : ""}`,

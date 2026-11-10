@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Heart, Navigation, Star } from "lucide-react";
+import { Navigation, Star } from "lucide-react";
+import { SaveButton } from "@/components/listing/save-button";
 import { Badge } from "@/components/ui/badge";
 import { PG_TYPE_LABEL, SHARING_LABEL, STALE_AVAILABILITY_DAYS } from "@/lib/constants";
 import { toggleCompare, useCompareItems } from "@/lib/compare-store";
@@ -48,7 +48,6 @@ export function PgCard({
 }) {
   const photo = property.photos[0]?.url;
   const sharing = property.roomTypes[0]?.sharingType;
-  const [saved, setSaved] = useState(false);
   const full = property.availableBeds <= 0;
   const availabilityFresh = isAvailabilityFresh(property.availabilityConfirmedAt);
   const compareItems = useCompareItems();
@@ -93,25 +92,9 @@ export function PgCard({
               Availability confirmed {formatUpdatedAt(property.availabilityConfirmedAt)}
             </Badge>
           ) : null}
-          <button
-            type="button"
-            aria-label="Save"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setSaved((v) => !v);
-              fetch("/api/saved", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ propertyId: property.id }),
-              }).catch(() => undefined);
-            }}
-            className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow-card"
-          >
-            <Heart
-              className={cn("h-5 w-5", saved ? "fill-primary text-primary" : "text-ink")}
-            />
-          </button>
+          <div className="absolute right-3 top-3 z-10" onClick={(e) => e.preventDefault()}>
+            <SaveButton propertyId={property.id} />
+          </div>
         </div>
         <div className="mt-3 space-y-1">
           <h3 className="font-semibold text-ink">{property.name}</h3>
@@ -124,9 +107,20 @@ export function PgCard({
             {sharing ? ` · ${SHARING_LABEL[sharing].replace(" Sharing", "")}` : ""}
             {property.foodIncluded ? " · Food included" : ""}
           </p>
+          {property.commute?.trueMonthlyCost ? (
+            <p className="text-sm font-medium text-ink">
+              True cost {formatInr(property.commute.trueMonthlyCost)}
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                (rent + {formatInr(property.commute.monthlyCommute ?? 0)} commute)
+              </span>
+            </p>
+          ) : null}
           {distance ? (
             <p className="text-sm font-medium text-primary">
               {distance}
+              {property.commute?.cheapest ? " · cheapest" : ""}
+              {property.commute?.fastest ? " · fastest" : ""}
               {origin?.label ? (
                 <span className="font-normal text-muted-foreground"> from {origin.label}</span>
               ) : null}

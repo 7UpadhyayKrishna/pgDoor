@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { FilterControls, FilterForm } from "@/components/search/filters";
 import { NearbyPlaces } from "@/components/search/nearby-places";
 import { PreferredLocation } from "@/components/search/preferred-location";
+import { SaveSearchButton } from "@/components/search/save-search-button";
 import { ExploreShell } from "@/components/search/explore-shell";
 import { searchFiltersSchema, searchProperties } from "@/modules/search";
 import { getAreaBySlugs, getNearbyForArea } from "@/modules/locations";
@@ -51,6 +52,13 @@ export async function SearchResults({
     destLng: blank(raw.destLng),
     destLabel: blank(raw.destLabel),
     commuteMax: blank(raw.commuteMax),
+    maxDailyCost: blank(raw.maxDailyCost),
+    arrivalTime: blank(raw.arrivalTime),
+    commuteDays: blank(raw.commuteDays),
+    slot: blank(raw.slot),
+    rankingStyle: blank(raw.rankingStyle),
+    dests: blank(raw.dests),
+    metroLine: blank(raw.metroLine),
     mode: blank(raw.mode),
     radiusKm: blank(raw.radiusKm),
     bounds: blank(raw.bounds),
@@ -101,9 +109,12 @@ export async function SearchResults({
         </div>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{total} PGs found</p>
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <Suspense fallback={null}>
           <PreferredLocation />
+        </Suspense>
+        <Suspense fallback={null}>
+          <SaveSearchButton />
         </Suspense>
       </div>
       <div className="mt-4">

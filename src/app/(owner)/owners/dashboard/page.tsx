@@ -100,6 +100,23 @@ export default async function OwnerDashboardPage() {
           </form>
         </div>
       ) : null}
+      {properties.some((p) => p.commuteBadges.length) ? (
+        <section className="mt-6 rounded-[18px] bg-white p-4 shadow-card">
+          <h2 className="font-semibold">Commute appeal</h2>
+          <ul className="mt-2 space-y-2 text-sm">
+            {properties.map((p) =>
+              p.commuteBadges.length ? (
+                <li key={p.id}>
+                  <span className="font-medium">{p.name}:</span> {p.commuteBadges.join(" · ")}
+                </li>
+              ) : null,
+            )}
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Demand insights and rent comparisons are indications, not a recommendation to raise rent.
+          </p>
+        </section>
+      ) : null}
       {leads.length ? (
         <ul className="mt-6 space-y-3">
           {leads.map((lead) => (

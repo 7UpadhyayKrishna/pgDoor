@@ -6,6 +6,7 @@ import { loadGoogleMaps, formatRentPin, getMapsBrowserKey } from "@/lib/google-m
 import type { MapPin } from "@/modules/search";
 import type { MapPoiLayer } from "@/lib/places";
 import { PG_TYPE_COLOR, PG_TYPE_LEGEND } from "@/lib/pg-type-colors";
+import { COMMUTE_BANDS, commuteBandColor } from "@/lib/commute/bands";
 import { cn } from "@/lib/utils";
 
 type LandmarkPin = {
@@ -38,10 +39,13 @@ const LAYER_COLORS: Record<MapPoiLayer, string> = {
   essentials: "#dc2626",
 };
 
-function createPricePinElement(pin: MapPin, highlighted: boolean) {
+function createPricePinElement(pin: MapPin, highlighted: boolean, colorByCommute: boolean) {
   const el = document.createElement("button");
   el.type = "button";
-  el.textContent = formatRentPin(pin.minRent);
+  el.textContent = pin.trueMonthlyCost
+    ? formatRentPin(pin.trueMonthlyCost)
+    : formatRentPin(pin.minRent);
+  const bg = colorByCommute ? commuteBandColor(pin.commuteMinutes) : PG_TYPE_COLOR[pin.pgType];
   el.style.cssText = [
     "border:2px solid #fff",
     "cursor:pointer",
@@ -50,7 +54,7 @@ function createPricePinElement(pin: MapPin, highlighted: boolean) {
     "border-radius:999px",
     "white-space:nowrap",
     "color:#fff",
-    `background:${PG_TYPE_COLOR[pin.pgType]}`,
+    `background:${bg}`,
     highlighted
       ? "transform:scale(1.2);box-shadow:0 0 0 3px #1a1a1a,0 4px 12px rgba(0,0,0,.3)"
       : "box-shadow:0 2px 8px rgba(0,0,0,.18)",
@@ -79,6 +83,8 @@ export function ExploreMap({
   onSelect,
   destination,
   onSearchArea,
+  onDropPin,
+  isochrones,
   className,
 }: {
   pins: MapPin[];
@@ -87,6 +93,8 @@ export function ExploreMap({
   onSelect: (id: string) => void;
   destination?: { lat: number; lng: number; label?: string } | null;
   onSearchArea?: (bounds: { south: number; west: number; north: number; east: number }) => void;
+  onDropPin?: (point: { lat: number; lng: number }) => void;
+  isochrones?: { minutes: number; path: { lat: number; lng: number }[] }[];
   className?: string;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -107,6 +115,13 @@ export function ExploreMap({
   const [layers, setLayers] = useState<Set<MapPoiLayer>>(new Set(["transport"]));
   const [pois, setPois] = useState<PoiPin[]>([]);
   const [landmarks, setLandmarks] = useState<LandmarkPin[]>([]);
+  const [dropPin, setDropPin] = useState(false);
+  const polygonsRef = useRef<google.maps.Polygon[]>([]);
+  const dropPinRef = useRef(false);
+  const onDropPinRef = useRef(onDropPin);
+  dropPinRef.current = dropPin;
+  onDropPinRef.current = onDropPin;
+  const colorByCommute = Boolean(destination);
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
@@ -144,6 +159,11 @@ export function ExploreMap({
       idleListener.current = map.addListener("idle", () => {
         setShowSearchArea(true);
       });
+      map.addListener("click", (event: google.maps.MapMouseEvent) => {
+        if (!dropPinRef.current || !event.latLng || !onDropPinRef.current) return;
+        onDropPinRef.current({ lat: event.latLng.lat(), lng: event.latLng.lng() });
+        setDropPin(false);
+      });
       setReady(true);
     }
 
@@ -176,7 +196,7 @@ export function ExploreMap({
       const marker = new AdvancedMarkerElement({
         map: null,
         position: { lat: p.latitude, lng: p.longitude },
-        content: createPricePinElement(p, false),
+        content: createPricePinElement(p, false, colorByCommute),
         title: p.name,
         zIndex: 1,
       });
@@ -193,7 +213,7 @@ export function ExploreMap({
       if (destination) bounds.extend({ lat: destination.lat, lng: destination.lng });
       map.fitBounds(bounds, 64);
     }
-  }, [ready, pins, destination]);
+  }, [ready, pins, destination, colorByCommute]);
 
   // Restyle only pins whose highlight changed (selected or hovered in the list)
   useEffect(() => {
@@ -203,7 +223,7 @@ export function ExploreMap({
       const marker = markersRef.current.get(id);
       const pin = pins.find((p) => p.id === id);
       if (!marker || !pin) return;
-      marker.content = createPricePinElement(pin, highlighted);
+      marker.content = createPricePinElement(pin, highlighted, colorByCommute);
       marker.zIndex = highlighted ? 10 : 1;
     };
     styledIds.current.forEach((id) => {
@@ -213,7 +233,7 @@ export function ExploreMap({
       if (!styledIds.current.has(id)) restyle(id, true);
     });
     styledIds.current = next;
-  }, [selectedId, hoveredId, ready, pins]);
+  }, [selectedId, hoveredId, ready, pins, colorByCommute]);
 
   // Pan to the selected pin
   useEffect(() => {
@@ -322,6 +342,25 @@ export function ExploreMap({
     return () => clearTimeout(timer);
   }, [ready, layers, selected, destination, pins]);
 
+  useEffect(() => {
+    if (!ready || !mapInstance.current || !window.google?.maps) return;
+    polygonsRef.current.forEach((p) => p.setMap(null));
+    polygonsRef.current = [];
+    const colors: Record<number, string> = { 15: "#16a34a33", 30: "#d9770633", 45: "#dc262633" };
+    for (const ring of isochrones ?? []) {
+      const polygon = new google.maps.Polygon({
+        map: mapInstance.current,
+        paths: ring.path,
+        fillColor: colors[ring.minutes] ?? "#2563eb33",
+        fillOpacity: 0.35,
+        strokeWeight: 1,
+        strokeColor: commuteBandColor(ring.minutes),
+        clickable: false,
+      });
+      polygonsRef.current.push(polygon);
+    }
+  }, [ready, isochrones]);
+
   // POI markers
   useEffect(() => {
     if (!ready || !mapInstance.current || !window.google?.maps) return;
@@ -396,13 +435,26 @@ export function ExploreMap({
         aria-label="Map legend"
         className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 rounded-xl bg-white/95 px-2.5 py-2 text-xs font-medium text-ink shadow-card"
       >
-        {PG_TYPE_LEGEND.map((item) => (
+        {(destination ? COMMUTE_BANDS : PG_TYPE_LEGEND).map((item) => (
           <li key={item.label} className="flex items-center gap-1.5">
             <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} />
             {item.label}
           </li>
         ))}
       </ul>
+
+      {onDropPin ? (
+        <button
+          type="button"
+          onClick={() => setDropPin((v) => !v)}
+          className={cn(
+            "absolute right-3 top-3 z-10 rounded-full px-3 py-1.5 text-xs font-semibold shadow-card",
+            dropPin ? "bg-ink text-white" : "bg-white/95 text-ink",
+          )}
+        >
+          {dropPin ? "Click map to drop pin" : "Drop pin"}
+        </button>
+      ) : null}
 
       {showSearchArea && onSearchArea ? (
         <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">

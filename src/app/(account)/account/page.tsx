@@ -13,6 +13,8 @@ export default async function AccountPage() {
       <ul className="mt-6 divide-y divide-border overflow-hidden rounded-[18px] bg-white shadow-card">
         {[
           ["/saved", "Saved PGs"],
+          ["/alerts", "Saved searches & alerts"],
+          ["/roommates", "Roommate matching"],
           ["/account/enquiries", "My enquiries"],
           ["/account/visits", "My visits"],
           ["/pgs", "Recently viewed"],

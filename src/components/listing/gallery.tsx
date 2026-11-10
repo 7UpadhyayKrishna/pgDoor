@@ -6,9 +6,13 @@ import { useState } from "react";
 export function Gallery({
   photos,
   name,
+  tourVideoUrl,
+  tourThumbnailUrl,
 }: {
   photos: { url: string; alt?: string | null }[];
   name: string;
+  tourVideoUrl?: string | null;
+  tourThumbnailUrl?: string | null;
 }) {
   const [active, setActive] = useState(0);
   const main = photos[active] ?? photos[0];
@@ -110,6 +114,18 @@ export function Gallery({
           </div>
         ) : null}
       </div>
+      {tourVideoUrl ? (
+        <details className="mt-3 rounded-[18px] bg-white p-3 shadow-card">
+          <summary className="cursor-pointer text-sm font-semibold">Virtual tour (60s max)</summary>
+          <video
+            className="mt-3 w-full rounded-xl"
+            controls
+            preload="none"
+            poster={tourThumbnailUrl ?? undefined}
+            src={tourVideoUrl}
+          />
+        </details>
+      ) : null}
     </div>
   );
 }

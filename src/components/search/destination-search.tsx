@@ -9,16 +9,24 @@ export type DestinationPlace = {
   label: string;
   latitude: number;
   longitude: number;
+  slug?: string;
 };
 
-type Suggestion = { placeId: string; description: string };
+type Suggestion = {
+  placeId: string;
+  description: string;
+  latitude?: number;
+  longitude?: number;
+  seeded?: boolean;
+  slug?: string;
+};
 
 export function DestinationSearch({
   value,
   onSelect,
   onClear,
   className,
-  placeholder = "Office, college, university or landmark",
+  placeholder = "Office, college, coaching or metro",
 }: {
   value?: string;
   onSelect: (place: DestinationPlace) => void;
@@ -41,17 +49,11 @@ export function DestinationSearch({
       skipFetch.current = false;
       return;
     }
-    const q = query.trim();
-    if (q.length < 2) {
-      setSuggestions([]);
-      return;
-    }
-
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
         const res = await fetch(
-          `/api/places/autocomplete?q=${encodeURIComponent(q)}&destination=1`,
+          `/api/destinations/suggest?q=${encodeURIComponent(query.trim())}`,
         );
         const data = await res.json();
         if (res.ok) {
@@ -65,34 +67,42 @@ export function DestinationSearch({
       } finally {
         setLoading(false);
       }
-    }, 300);
-
+    }, 200);
     return () => clearTimeout(timer);
   }, [query]);
 
   async function pick(suggestion: Suggestion) {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/places/details?placeId=${encodeURIComponent(suggestion.placeId)}`,
-      );
-      const data = await res.json();
-      if (!res.ok || !data.place) return;
-      const place = data.place as {
-        placeId: string;
-        address: string;
-        latitude: number;
-        longitude: number;
-      };
+    if (suggestion.latitude != null && suggestion.longitude != null) {
       skipFetch.current = true;
       setQuery(suggestion.description);
       setSuggestions([]);
       setOpen(false);
       onSelect({
-        placeId: place.placeId,
+        placeId: suggestion.placeId,
         label: suggestion.description,
-        latitude: place.latitude,
-        longitude: place.longitude,
+        latitude: suggestion.latitude,
+        longitude: suggestion.longitude,
+        slug: suggestion.slug,
+      });
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/destinations/resolve?placeId=${encodeURIComponent(suggestion.placeId)}&label=${encodeURIComponent(suggestion.description)}`,
+      );
+      const data = await res.json();
+      if (!res.ok || !data.place) return;
+      skipFetch.current = true;
+      setQuery(suggestion.description);
+      setSuggestions([]);
+      setOpen(false);
+      onSelect({
+        placeId: data.place.placeId,
+        label: data.place.label,
+        latitude: data.place.latitude,
+        longitude: data.place.longitude,
+        slug: data.place.slug,
       });
     } finally {
       setLoading(false);
@@ -102,7 +112,7 @@ export function DestinationSearch({
   return (
     <div className={cn("relative min-w-0", className)}>
       <span className="px-2 text-xs font-medium text-muted-foreground">
-        Where do you want to live near?
+        Where do you go every day?
       </span>
       <div className="relative mt-1">
         <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -137,6 +147,9 @@ export function DestinationSearch({
                 onClick={() => pick(s)}
               >
                 {s.description}
+                {s.seeded ? (
+                  <span className="ml-2 text-xs text-muted-foreground">popular</span>
+                ) : null}
               </button>
             </li>
           ))}
@@ -154,6 +167,7 @@ export function buildDestinationSearchHref(opts: {
   commuteMax?: number;
   mode?: string;
   availableFrom?: string;
+  maxDailyCost?: number;
 }) {
   const params = new URLSearchParams();
   if (opts.destLat != null && opts.destLng != null) {
@@ -163,9 +177,10 @@ export function buildDestinationSearchHref(opts: {
   if (opts.destLabel) params.set("destLabel", opts.destLabel);
   if (opts.budgetMax) params.set("budgetMax", String(opts.budgetMax));
   if (opts.commuteMax) params.set("commuteMax", String(opts.commuteMax));
+  if (opts.maxDailyCost != null) params.set("maxDailyCost", String(opts.maxDailyCost));
   if (opts.mode) params.set("mode", opts.mode);
   if (opts.availableFrom) params.set("availableFrom", opts.availableFrom);
-  if (opts.destLat != null) params.set("sort", "commute");
+  if (opts.destLat != null) params.set("sort", "true_cost");
   const qs = params.toString();
   return qs ? `/pgs?${qs}` : "/pgs";
 }
