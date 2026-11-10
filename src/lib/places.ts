@@ -1,4 +1,5 @@
 import { HttpError } from "@/lib/rbac";
+import { decodeOsmPlaceId, osmAutocomplete } from "@/lib/osm-geocode";
 
 export type PlaceSuggestion = {
   placeId: string;
@@ -30,6 +31,10 @@ function placesKey() {
 
 type PlacesApiError = { error?: { message?: string; status?: string } };
 
+/** After Google refuses (billing off, API disabled, key restricted), skip it for a while. */
+const GOOGLE_RETRY_MS = 10 * 60 * 1000;
+let googleUnavailableUntil = 0;
+
 export async function autocompletePlaces(
   query: string,
   opts?: { forDestination?: boolean },
@@ -37,6 +42,25 @@ export async function autocompletePlaces(
   const q = query.trim();
   if (q.length < 2) return [];
 
+  if (process.env.GOOGLE_MAPS_API_KEY && Date.now() >= googleUnavailableUntil) {
+    try {
+      return await googleAutocomplete(q, opts);
+    } catch (error) {
+      googleUnavailableUntil = Date.now() + GOOGLE_RETRY_MS;
+      console.warn(`[places] Google autocomplete failed, using OpenStreetMap: ${(error as Error).message}`);
+    }
+  }
+  try {
+    return await osmAutocomplete(q);
+  } catch {
+    throw new HttpError(502, "Location search is unavailable right now. Drop a pin on the map instead.");
+  }
+}
+
+async function googleAutocomplete(
+  q: string,
+  opts?: { forDestination?: boolean },
+): Promise<PlaceSuggestion[]> {
   const body: Record<string, unknown> = {
     input: q,
     includedRegionCodes: ["in"],
@@ -81,6 +105,9 @@ export async function autocompletePlaces(
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
+  const osm = decodeOsmPlaceId(placeId);
+  if (osm) return osm;
+
   const res = await fetch(`${PLACES_API}/places/${encodeURIComponent(placeId)}`, {
     headers: {
       "X-Goog-Api-Key": placesKey(),

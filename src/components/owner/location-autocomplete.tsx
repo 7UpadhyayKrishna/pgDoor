@@ -27,9 +27,15 @@ export function LocationAutocomplete({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const skipFetch = useRef(false);
+  const queryRef = useRef(query);
+  queryRef.current = query;
 
   useEffect(() => {
-    setQuery(value);
+    // Address changes from elsewhere (map pin, typed address) shouldn't pop open suggestions.
+    if (value !== queryRef.current) {
+      skipFetch.current = true;
+      setQuery(value);
+    }
   }, [value]);
 
   useEffect(() => {

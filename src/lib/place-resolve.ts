@@ -18,6 +18,9 @@ type CityLike = {
   areas: { id: string; name: string; latitude: number | null; longitude: number | null }[];
 };
 
+/** A pin farther than this from every supported city centre is outside our coverage. */
+const MAX_NEAREST_CITY_KM = 60;
+
 export function resolveCityAndArea(
   cities: CityLike[],
   place: {
@@ -58,7 +61,7 @@ export function resolveCityAndArea(
   }
 
   if (!city) {
-    let best = Infinity;
+    let best = MAX_NEAREST_CITY_KM;
     for (const c of cities) {
       if (c.latitude == null || c.longitude == null) continue;
       const d = haversineKm(place.latitude, place.longitude, c.latitude, c.longitude);

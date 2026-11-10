@@ -142,7 +142,7 @@ export function validateStep(step: number, draft: ListingDraft): StepErrors {
   }
   if (step === 1) {
     if (!draft.placeAddress || draft.latitude == null || draft.longitude == null) {
-      errors.location = "Search and pick your PG location from the suggestions";
+      errors.location = "Set your PG location: search for it, paste a Google Maps link, or tap the map to drop a pin";
     } else if (!draft.cityId || !draft.areaId) {
       errors.location = "This location is outside the cities we support right now (Delhi NCR)";
     }
